@@ -12,7 +12,7 @@ import {
   Alert,
   ImageBackground,
 } from 'react-native';
-import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import StatusBadge from '../components/StatusBadge';
 import { colors } from '../theme';
@@ -57,6 +57,7 @@ export default function EquipesScreen({ navigation }: Props) {
   const [equipeEditando, setEquipeEditando] = useState<Equipe | null>(null);
   const [sidebarAberta, setSidebarAberta]  = useState(true);
   const [showNotif, setShowNotif]          = useState(false);
+  const [showAllNotif, setShowAllNotif]    = useState(false);
   const [showLogout, setShowLogout]        = useState(false);
   const [hoverSide, setHoverSide]          = useState<string | null>(null);
 
@@ -363,17 +364,15 @@ export default function EquipesScreen({ navigation }: Props) {
                   </View>
 
                   <View style={[s.cAc, s.cellRow]}>
-                    <TouchableOpacity style={[s.acBtn, { backgroundColor: '#EDE9FE' }]} onPress={() => abrirModalEditar(eq)}>
-                      <MaterialIcons name="edit" size={13} color={colors.primary} />
+                    <TouchableOpacity style={s.acBtnEdit} onPress={() => abrirModalEditar(eq)}>
+                      <Ionicons name="create-outline" size={14} color={colors.primary} />
+                      <Text style={s.acBtnTxt}>Editar</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={[s.acBtn, { backgroundColor: '#E0F2FE' }]} onPress={() => handleAlternarStatus(eq.id)}>
-                      <FontAwesome5 name="sitemap" size={11} color="#0EA5E9" />
+                    <TouchableOpacity style={s.acBtnStatus} onPress={() => handleAlternarStatus(eq.id)}>
+                      <Ionicons name="swap-horizontal-outline" size={14} color="#0EA5E9" />
                     </TouchableOpacity>
-                    <TouchableOpacity style={[s.acBtn, { backgroundColor: '#F3F0FF' }]}>
-                      <Ionicons name="pricetag-outline" size={12} color="#8B5CF6" />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[s.acBtn, { backgroundColor: '#FEE2E2' }]} onPress={() => handleExcluir(eq)}>
-                      <Ionicons name="trash-outline" size={12} color={colors.error} />
+                    <TouchableOpacity style={s.acBtnDel} onPress={() => handleExcluir(eq)}>
+                      <Ionicons name="trash-outline" size={14} color={colors.error} />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -483,11 +482,42 @@ export default function EquipesScreen({ navigation }: Props) {
               </View>
             </View>
           ))}
-          <TouchableOpacity style={s.notifVerTodos}>
+          <TouchableOpacity style={s.notifVerTodos} onPress={() => { setShowNotif(false); setShowAllNotif(true); }}>
             <Text style={s.notifVerTodosTxt}>Ver todas as notificações</Text>
           </TouchableOpacity>
         </View>
       )}
+
+      {/* ── MODAL TODAS AS NOTIFICAÇÕES ──────────────────────────────────── */}
+      <Modal visible={showAllNotif} transparent animationType="fade">
+        <View style={s.overlay}>
+          <View style={s.allNotifCard}>
+            <View style={s.allNotifHeader}>
+              <Text style={s.allNotifTitulo}>Todas as Notificações</Text>
+              <TouchableOpacity onPress={() => setShowAllNotif(false)}>
+                <Ionicons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {NOTIFICACOES.map((n) => (
+                <View key={n.id} style={s.allNotifItem}>
+                  <View style={[s.notifCircle, { backgroundColor: n.cor }]} />
+                  <View style={s.notifTextoBox}>
+                    <View style={s.notifTitleRow}>
+                      <Text style={s.notifTituloPill}>{n.titulo}</Text>
+                      <Text style={s.notifTempo}>{n.tempo}</Text>
+                    </View>
+                    <Text style={s.notifDesc}>{n.desc}</Text>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+            <TouchableOpacity style={s.allNotifFechar} onPress={() => setShowAllNotif(false)}>
+              <Text style={s.allNotifFecharTxt}>Fechar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* ── MODAL LOGOUT ─────────────────────────────────────────────────── */}
       <Modal visible={showLogout} transparent animationType="fade">
@@ -571,18 +601,26 @@ const s = StyleSheet.create({
 
   // Notificações popup (Motiva white theme)
   notifDot:       { position: 'absolute', top: -2, right: -2, width: 7, height: 7, borderRadius: 4, backgroundColor: '#EF4444', borderWidth: 1, borderColor: '#fff' },
-  notifPanel:     { position: 'absolute', top: 58, right: 80, width: 340, backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: '#EDE9FE', shadowColor: '#5E22F3', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 24, elevation: 20, zIndex: 200 },
-  notifHeader:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F1F5F9', backgroundColor: '#FAF8FF', borderTopLeftRadius: 16, borderTopRightRadius: 16 },
-  notifTitulo:    { fontSize: 15, fontWeight: '700', color: colors.secondary },
-  notifItem:      { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 20, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
-  notifCircle:    { width: 42, height: 42, borderRadius: 21, marginRight: 14, marginTop: 2 },
+  notifPanel:     { position: 'absolute', top: 54, right: 72, width: 280, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#EDE9FE', shadowColor: '#5E22F3', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.1, shadowRadius: 16, elevation: 20, zIndex: 200 },
+  notifHeader:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  notifTitulo:    { fontSize: 13, fontWeight: '700', color: colors.secondary },
+  notifItem:      { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
+  notifCircle:    { width: 30, height: 30, borderRadius: 15, marginRight: 10, marginTop: 1 },
   notifTextoBox:  { flex: 1 },
-  notifTitleRow:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 },
-  notifTituloPill:{ fontSize: 13, fontWeight: '700', color: colors.secondary },
-  notifTempo:     { fontSize: 11, color: '#94A3B8' },
-  notifDesc:      { fontSize: 12, color: '#64748B', lineHeight: 17 },
-  notifVerTodos:  { paddingVertical: 13, alignItems: 'center', borderTopWidth: 1, borderTopColor: '#F1F5F9' },
-  notifVerTodosTxt:{ fontSize: 12, color: colors.primary, fontWeight: '700' },
+  notifTitleRow:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 },
+  notifTituloPill:{ fontSize: 12, fontWeight: '700', color: colors.secondary },
+  notifTempo:     { fontSize: 10, color: '#94A3B8' },
+  notifDesc:      { fontSize: 11, color: '#64748B', lineHeight: 15 },
+  notifVerTodos:   { paddingVertical: 10, alignItems: 'center', borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  notifVerTodosTxt:{ fontSize: 11, color: colors.primary, fontWeight: '700' },
+
+  // Modal todas as notificações
+  allNotifCard:    { backgroundColor: '#fff', borderRadius: 20, width: '100%', maxWidth: 420, maxHeight: 520, overflow: 'hidden' },
+  allNotifHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 22, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  allNotifTitulo:  { fontSize: 16, fontWeight: '700', color: colors.secondary },
+  allNotifItem:    { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 22, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
+  allNotifFechar:  { paddingVertical: 14, alignItems: 'center', borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  allNotifFecharTxt:{ fontSize: 13, color: '#64748B', fontWeight: '600' },
 
   // Card branco
   contentCard: {
@@ -648,18 +686,22 @@ const s = StyleSheet.create({
   cRd: { flex: 0.9 },
   cTr: { flex: 1.6 },
   cRs: { flex: 1.5 },
-  cAc: { width: 120 },
+  cAc: { width: 140 },
 
   tdId:    { fontSize: 11, fontWeight: '700', color: colors.primary },
   tdTxt:   { fontSize: 11, color: '#334155', fontWeight: '500' },
   tdSub:   { fontSize: 10, color: '#94A3B8' },
-  cellRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  avatarRow:{ width: 22, height: 22, borderRadius: 11 },
-  acBtn:   { width: 24, height: 24, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+  cellRow: { flexDirection: 'row', alignItems: 'center' },
+  avatarRow:{ width: 22, height: 22, borderRadius: 11, marginRight: 6 },
+  acBtn:       { width: 24, height: 24, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+  acBtnEdit:   { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: '#DDD6FE', backgroundColor: '#F5F3FF', marginRight: 4 },
+  acBtnTxt:    { fontSize: 11, color: colors.primary, fontWeight: '600', marginLeft: 3 },
+  acBtnStatus: { width: 28, height: 28, borderRadius: 6, borderWidth: 1, borderColor: '#BAE6FD', backgroundColor: '#F0F9FF', alignItems: 'center', justifyContent: 'center', marginRight: 4 },
+  acBtnDel:    { width: 28, height: 28, borderRadius: 6, borderWidth: 1, borderColor: '#FECACA', backgroundColor: '#FFF5F5', alignItems: 'center', justifyContent: 'center' },
 
   // Paginação
-  pagination:{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 4, marginTop: 8 },
-  pgBtn:  { width: 30, height: 30, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  pagination:{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', marginTop: 8 },
+  pgBtn:  { width: 30, height: 30, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', marginLeft: 4 },
   pgBtnOn:{ backgroundColor: colors.primary, borderColor: colors.primary },
   pgBtnOff:{ opacity: 0.35 },
   pgTxt:  { fontSize: 12, color: colors.secondary, fontWeight: '500' },
