@@ -1,0 +1,74 @@
+import { Ocorrencia, Usuario } from '../types';
+
+export const mockUsuarios: Usuario[] = [
+  {
+    id: 1,
+    nome: 'Admin Motiva',
+    usuario: 'admin',
+    senha: '123456',
+    cargo: 'Administrador',
+  },
+  {
+    id: 2,
+    nome: 'João Silva',
+    usuario: 'joao',
+    senha: '123456',
+    cargo: 'Analista de Segurança',
+  },
+];
+
+export const mockOcorrencias: Ocorrencia[] = [
+  {
+    id: 1,
+    titulo: 'Vazamento de óleo na área B',
+    descricao: 'Foi identificado um vazamento de óleo próximo às máquinas do setor B. O líquido está escorregando pelo chão e representa risco de queda.',
+    local: 'Setor B - Linha de Produção',
+    risco: 'alto',
+    data: '2026-06-08',
+    categoria: 'Segurança',
+    status: 'aberta',
+    responsavel: 'João Silva',
+  },
+  {
+    id: 2,
+    titulo: 'EPI fora do prazo de validade',
+    descricao: 'Os capacetes do setor A estão com prazo de validade vencido. Necessária substituição imediata.',
+    local: 'Setor A - Almoxarifado',
+    risco: 'medio',
+    data: '2026-06-07',
+    categoria: 'EPI',
+    status: 'em_andamento',
+    responsavel: 'Maria Santos',
+  },
+  {
+    id: 3,
+    titulo: 'Iluminação inadequada no corredor 3',
+    descricao: 'Lâmpadas queimadas no corredor 3 dificultam a visibilidade no período noturno.',
+    local: 'Corredor 3 - Bloco C',
+    risco: 'baixo',
+    data: '2026-06-06',
+    categoria: 'Infraestrutura',
+    status: 'resolvida',
+  },
+  {
+    id: 4,
+    titulo: 'Equipamento sem manutenção preventiva',
+    descricao: 'A prensa hidráulica P-04 não passou pela manutenção preventiva trimestral conforme cronograma.',
+    local: 'Galpão Industrial - Maquinário',
+    risco: 'alto',
+    data: '2026-06-05',
+    categoria: 'Manutenção',
+    status: 'aberta',
+    responsavel: 'Carlos Oliveira',
+  },
+  {
+    id: 5,
+    titulo: 'Sinalização de emergência apagada',
+    descricao: 'Placa de saída de emergência sem energia no segundo andar. Necessária verificação do sistema elétrico.',
+    local: '2º Andar - Ala Administrativa',
+    risco: 'medio',
+    data: '2026-06-04',
+    categoria: 'Segurança',
+    status: 'em_andamento',
+  },
+];
