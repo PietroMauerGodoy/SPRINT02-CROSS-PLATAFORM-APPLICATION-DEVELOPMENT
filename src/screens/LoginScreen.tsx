@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert,
   ImageBackground,
   Image,
+  ActivityIndicator,
+  Keyboard,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -25,19 +26,44 @@ type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Login'>;
 };
 
+type Erros = {
+  usuario?: string;
+  senha?: string;
+  geral?: string;
+};
+
 export default function LoginScreen({ navigation }: Props) {
   const [usuario, setUsuario] = useState('');
   const [senha, setSenha] = useState('');
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [erros, setErros] = useState<Erros>({});
+  const [focado, setFocado] = useState<'usuario' | 'senha' | null>(null);
 
-  function handleLogin() {
-    if (!usuario.trim() || !senha.trim()) {
-      Alert.alert('Atenção', 'Preencha o usuário e a senha.');
-      return;
+  const senhaRef = useRef<TextInput>(null);
+
+  function validar(): boolean {
+    const novosErros: Erros = {};
+
+    if (!usuario.trim()) {
+      novosErros.usuario = 'Informe o nome de usuário';
+    }
+    if (!senha.trim()) {
+      novosErros.senha = 'Informe a senha';
     }
 
+    setErros(novosErros);
+    return Object.keys(novosErros).length === 0;
+  }
+
+  function handleLogin() {
+    Keyboard.dismiss();
+
+    if (!validar()) return;
+
     setLoading(true);
+    setErros({});
+
     setTimeout(() => {
       const encontrado = mockUsuarios.find(
         (u) => u.usuario === usuario.trim() && u.senha === senha
@@ -48,9 +74,19 @@ export default function LoginScreen({ navigation }: Props) {
       if (encontrado) {
         navigation.replace('Ocorrencias');
       } else {
-        Alert.alert('Erro', 'Usuário ou senha incorretos.');
+        setErros({ geral: 'Usuário ou senha incorretos. Verifique os dados e tente novamente.' });
       }
     }, 800);
+  }
+
+  function handleChangeUsuario(text: string) {
+    setUsuario(text);
+    if (erros.usuario) setErros((e) => ({ ...e, usuario: undefined }));
+  }
+
+  function handleChangeSenha(text: string) {
+    setSenha(text);
+    if (erros.senha) setErros((e) => ({ ...e, senha: undefined }));
   }
 
   return (
@@ -64,73 +100,110 @@ export default function LoginScreen({ navigation }: Props) {
         <ScrollView
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
+          onScrollBeginDrag={Keyboard.dismiss}
         >
-          <View style={styles.card}>
-            <View style={styles.logoContainer}>
-              <Image
-                source={logoNegativo}
-                style={styles.logo}
-                resizeMode="contain"
-              />
-            </View>
-
-            <Text style={styles.title}>Bem vindo!</Text>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Nome de usuário</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Usuário..."
-                placeholderTextColor={colors.gray400}
-                value={usuario}
-                onChangeText={setUsuario}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Senha</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Senha..."
-                placeholderTextColor={colors.gray400}
-                value={senha}
-                onChangeText={setSenha}
-                secureTextEntry={!mostrarSenha}
-                autoCapitalize="none"
-              />
-            </View>
-
-            <TouchableOpacity
-              style={styles.checkboxRow}
-              onPress={() => setMostrarSenha(!mostrarSenha)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.checkbox, mostrarSenha && styles.checkboxChecked]}>
-                {mostrarSenha && <Text style={styles.checkmark}>✓</Text>}
+            <View style={styles.card}>
+              <View style={styles.logoContainer}>
+                <Image
+                  source={logoNegativo}
+                  style={styles.logo}
+                  resizeMode="contain"
+                />
               </View>
-              <Text style={styles.checkboxLabel}>Mostrar Senha</Text>
-            </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.button, loading && styles.buttonDisabled]}
-              onPress={handleLogin}
-              activeOpacity={0.85}
-              disabled={loading}
-            >
-              <Text style={styles.buttonText}>
-                {loading ? 'Entrando...' : 'Login'}
-              </Text>
-            </TouchableOpacity>
+              <Text style={styles.title}>Bem vindo!</Text>
 
-            <TouchableOpacity activeOpacity={0.7}>
-              <Text style={styles.forgotText}>
-                Esqueceu o login? Contate o suporte!
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
+              {/* Erro geral (credenciais inválidas) */}
+              {erros.geral && (
+                <View style={styles.erroGeralBox}>
+                  <Text style={styles.erroGeralText}>⚠ {erros.geral}</Text>
+                </View>
+              )}
+
+              {/* Campo usuário */}
+              <View style={styles.fieldGroup}>
+                <Text style={styles.label}>Nome de usuário</Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    focado === 'usuario' && styles.inputFocado,
+                    erros.usuario ? styles.inputErro : null,
+                  ]}
+                  placeholder="Usuário..."
+                  placeholderTextColor={colors.gray400}
+                  value={usuario}
+                  onChangeText={handleChangeUsuario}
+                  onFocus={() => setFocado('usuario')}
+                  onBlur={() => setFocado(null)}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="next"
+                  onSubmitEditing={() => senhaRef.current?.focus()}
+                />
+                {erros.usuario && (
+                  <Text style={styles.erroTexto}>⚠ {erros.usuario}</Text>
+                )}
+              </View>
+
+              {/* Campo senha */}
+              <View style={styles.fieldGroup}>
+                <Text style={styles.label}>Senha</Text>
+                <TextInput
+                  ref={senhaRef}
+                  style={[
+                    styles.input,
+                    focado === 'senha' && styles.inputFocado,
+                    erros.senha ? styles.inputErro : null,
+                  ]}
+                  placeholder="Senha..."
+                  placeholderTextColor={colors.gray400}
+                  value={senha}
+                  onChangeText={handleChangeSenha}
+                  onFocus={() => setFocado('senha')}
+                  onBlur={() => setFocado(null)}
+                  secureTextEntry={!mostrarSenha}
+                  autoCapitalize="none"
+                  returnKeyType="done"
+                  onSubmitEditing={handleLogin}
+                />
+                {erros.senha && (
+                  <Text style={styles.erroTexto}>⚠ {erros.senha}</Text>
+                )}
+              </View>
+
+              {/* Mostrar senha */}
+              <TouchableOpacity
+                style={styles.checkboxRow}
+                onPress={() => setMostrarSenha(!mostrarSenha)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.checkbox, mostrarSenha && styles.checkboxChecked]}>
+                  {mostrarSenha && <Text style={styles.checkmark}>✓</Text>}
+                </View>
+                <Text style={styles.checkboxLabel}>Mostrar Senha</Text>
+              </TouchableOpacity>
+
+              {/* Botão login */}
+              <TouchableOpacity
+                style={[styles.button, loading && styles.buttonDisabled]}
+                onPress={handleLogin}
+                activeOpacity={0.85}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color={colors.white} size="small" />
+                ) : (
+                  <Text style={styles.buttonText}>Login</Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity activeOpacity={0.7}>
+                <Text style={styles.forgotText}>
+                  Esqueceu o login? Contate o suporte!
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
       </KeyboardAvoidingView>
     </ImageBackground>
   );
@@ -179,6 +252,19 @@ const styles = StyleSheet.create({
     color: colors.white,
     marginBottom: spacing.sm,
   },
+  erroGeralBox: {
+    backgroundColor: 'rgba(239, 68, 68, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.5)',
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  erroGeralText: {
+    color: '#FCA5A5',
+    fontSize: 13,
+    fontWeight: '500',
+  },
   fieldGroup: {
     gap: spacing.xs,
   },
@@ -194,8 +280,25 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 2,
     fontSize: 15,
     color: colors.secondary,
-    borderWidth: 1,
-    borderColor: colors.gray200,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  inputFocado: {
+    borderColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+  },
+  inputErro: {
+    borderColor: colors.error,
+    backgroundColor: '#FFF5F5',
+  },
+  erroTexto: {
+    color: '#FCA5A5',
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 2,
   },
   checkboxRow: {
     flexDirection: 'row',
@@ -231,6 +334,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     alignItems: 'center',
     marginTop: spacing.xs,
+    minHeight: 50,
+    justifyContent: 'center',
   },
   buttonDisabled: {
     opacity: 0.6,
