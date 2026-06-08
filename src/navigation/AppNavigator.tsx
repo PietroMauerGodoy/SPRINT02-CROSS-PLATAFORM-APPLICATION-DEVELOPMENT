@@ -4,6 +4,7 @@ import { RootStackParamList } from '../types';
 import LoginScreen from '../screens/LoginScreen';
 import EquipesScreen from '../screens/EquipesScreen';
 import OcorrenciasScreen from '../screens/OcorrenciasScreen';
+import KanbanScreen from '../screens/KanbanScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -16,6 +17,7 @@ export default function AppNavigator() {
       >
         <Stack.Screen name="Login"       component={LoginScreen}       />
         <Stack.Screen name="Equipes"     component={EquipesScreen}     />
+        <Stack.Screen name="Kanban"      component={KanbanScreen}      />
         <Stack.Screen name="Ocorrencias" component={OcorrenciasScreen} />
       </Stack.Navigator>
     </NavigationContainer>

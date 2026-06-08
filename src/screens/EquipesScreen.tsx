@@ -197,13 +197,14 @@ export default function EquipesScreen({ navigation }: Props) {
         {sidebarAberta && (
           <View style={s.sidebar}>
             {[
-              { icon: 'grid-outline',      label: 'Dashboard',    onPress: undefined,                                  ativo: false },
-              { icon: 'people-outline',    label: 'Equipes',      onPress: undefined,                                  ativo: true  },
-              { icon: 'warning-outline',   label: 'Ocorrências',  onPress: () => navigation.navigate('Ocorrencias'),   ativo: false },
-              { icon: 'map-outline',       label: 'Trechos',      onPress: undefined,                                  ativo: false },
-              { icon: 'calendar-outline',  label: 'Planejamento', onPress: undefined,                                  ativo: false },
-              { icon: 'bar-chart-outline', label: 'Relatórios',   onPress: undefined,                                  ativo: false },
-              { icon: 'settings-outline',  label: 'Config.',      onPress: undefined,                                  ativo: false },
+              { icon: 'grid-outline',      label: 'Dashboard',    onPress: undefined,                                ativo: false },
+              { icon: 'people-outline',    label: 'Equipes',      onPress: undefined,                                ativo: true  },
+              { icon: 'albums-outline',    label: 'Kanban',       onPress: () => navigation.navigate('Kanban'),      ativo: false },
+              { icon: 'warning-outline',   label: 'Ocorrências',  onPress: () => navigation.navigate('Ocorrencias'), ativo: false },
+              { icon: 'map-outline',       label: 'Trechos',      onPress: undefined,                                ativo: false },
+              { icon: 'calendar-outline',  label: 'Planejamento', onPress: undefined,                                ativo: false },
+              { icon: 'bar-chart-outline', label: 'Relatórios',   onPress: undefined,                                ativo: false },
+              { icon: 'settings-outline',  label: 'Config.',      onPress: undefined,                                ativo: false },
             ].map((item) => {
               const hovered = hoverSide === item.label && !item.ativo;
               return (
@@ -339,7 +340,7 @@ export default function EquipesScreen({ navigation }: Props) {
               </View>
             ) : (
               paginadas.map((eq) => (
-                <View key={eq.id} style={s.trow}>
+                <TouchableOpacity key={eq.id} style={s.trow} onPress={() => navigation.navigate('Kanban')} activeOpacity={0.75}>
                   <Text style={[s.tdId, s.cId]}>{eq.id}</Text>
 
                   <View style={[s.cEq, s.cellRow]}>
@@ -364,18 +365,18 @@ export default function EquipesScreen({ navigation }: Props) {
                   </View>
 
                   <View style={[s.cAc, s.cellRow]}>
-                    <TouchableOpacity style={s.acBtnEdit} onPress={() => abrirModalEditar(eq)}>
+                    <TouchableOpacity style={s.acBtnEdit} onPress={(e) => { e.stopPropagation?.(); abrirModalEditar(eq); }}>
                       <Ionicons name="create-outline" size={14} color={colors.primary} />
                       <Text style={s.acBtnTxt}>Editar</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={s.acBtnStatus} onPress={() => handleAlternarStatus(eq.id)}>
+                    <TouchableOpacity style={s.acBtnStatus} onPress={(e) => { e.stopPropagation?.(); handleAlternarStatus(eq.id); }}>
                       <Ionicons name="swap-horizontal-outline" size={14} color="#0EA5E9" />
                     </TouchableOpacity>
-                    <TouchableOpacity style={s.acBtnDel} onPress={() => handleExcluir(eq)}>
+                    <TouchableOpacity style={s.acBtnDel} onPress={(e) => { e.stopPropagation?.(); handleExcluir(eq); }}>
                       <Ionicons name="trash-outline" size={14} color={colors.error} />
                     </TouchableOpacity>
                   </View>
-                </View>
+                </TouchableOpacity>
               ))
             )}
 

@@ -1,0 +1,1150 @@
+import { useState, useMemo, useRef } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Pressable,
+  StyleSheet,
+  ScrollView,
+  Image,
+  Modal,
+  Alert,
+  ImageBackground,
+} from 'react-native';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { colors } from '../theme';
+import { KanbanItem, RootStackParamList, SeveridadeVegetacao } from '../types';
+import { mockKanban } from '../data/mockData';
+
+import bgRoxo     from '../../assets/images/backgroundroxo.png';
+import logoNeg    from '../../assets/images/Motiva_Logo-Negativo.png';
+import perfilLogo from '../../assets/images/perfil_logo.png';
+
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const NOTIFICACOES = [
+  { id: 1, cor: '#F59E0B', titulo: 'Equipe inativa',       desc: 'Equipe #03 está inativa há mais de 3 dias.',        tempo: '5 min atrás' },
+  { id: 2, cor: '#3B82F6', titulo: 'Nova equipe criada',   desc: 'Equipe #11 foi cadastrada com sucesso.',             tempo: '1h atrás'    },
+  { id: 3, cor: '#F97316', titulo: 'Equipe em campo',      desc: 'Equipe #06 registrou entrada no BR-116 Km 55.',     tempo: '2h atrás'    },
+  { id: 4, cor: '#8B5CF6', titulo: 'Relatório disponível', desc: 'O relatório semanal de operações está disponível.', tempo: '1 dia atrás' },
+];
+
+const COLUNAS: {
+  id: string; label: string; cor: string; severidade: SeveridadeVegetacao | null;
+}[] = [
+  { id: 'todos',   label: 'Todos os KMs',        cor: '#7C3AED', severidade: null      },
+  { id: 'leve',    label: 'Leve — 5 a 15cm',     cor: '#16A34A', severidade: 'leve'    },
+  { id: 'grave',   label: 'Grave — 15 a 25cm',   cor: '#D97706', severidade: 'grave'   },
+  { id: 'critico', label: 'Crítico — 25 a 30cm', cor: '#DC2626', severidade: 'critico' },
+];
+
+const VEGETACAO_OPTS = [
+  'Grama Bermuda (Rasteira)',
+  'Grama São Carlos',
+  'Capim Colonião',
+  'Capim Napiê',
+  'Mata Ciliar Densa',
+];
+const RODOVIAS_FILTRO = ['Todas', 'BR-116', 'BR-381', 'SP-280'];
+const RODOVIAS_FORM   = ['BR-116', 'BR-381', 'SP-280'];
+
+const RODOVIA_COR: Record<string, string> = {
+  'BR-116': '#3B82F6',
+  'BR-381': '#6366F1',
+  'SP-280': '#8B5CF6',
+};
+const VEG_COR: Record<string, string> = {
+  'Grama Bermuda (Rasteira)': '#22C55E',
+  'Grama São Carlos':          '#86EFAC',
+  'Capim Colonião':            '#FBBF24',
+  'Capim Napiê':               '#F97316',
+  'Mata Ciliar Densa':         '#EF4444',
+};
+
+function calcSeveridade(cm: number): SeveridadeVegetacao {
+  if (cm >= 25) return 'critico';
+  if (cm >= 15) return 'grave';
+  if (cm >= 5)  return 'leve';
+  return 'sem_ocorrencia';
+}
+function sevCor(sev: SeveridadeVegetacao): string {
+  const m: Record<SeveridadeVegetacao, string> = {
+    sem_ocorrencia: '#7C3AED', leve: '#16A34A', grave: '#D97706', critico: '#DC2626',
+  };
+  return m[sev];
+}
+function sevBg(sev: SeveridadeVegetacao): string {
+  const m: Record<SeveridadeVegetacao, string> = {
+    sem_ocorrencia: '#EDE9FE', leve: '#DCFCE7', grave: '#FEF3C7', critico: '#FEE2E2',
+  };
+  return m[sev];
+}
+function sevLabel(sev: SeveridadeVegetacao): string {
+  const m: Record<SeveridadeVegetacao, string> = {
+    sem_ocorrencia: 'Sem Ocorrência', leve: 'Leve', grave: 'Grave', critico: 'Crítico',
+  };
+  return m[sev];
+}
+function getIA(item: KanbanItem): { texto: string; cor: string } {
+  if (item.alturaAtual >= 25) return { texto: 'Risco imediato',     cor: '#DC2626' };
+  if (item.alturaAtual >= 15) return { texto: 'Crítico em ~2 dias', cor: '#D97706' };
+  if (item.alturaAtual >= 5)  return { texto: 'Grave em ~4 dias',   cor: '#F97316' };
+  return { texto: 'Condição normal', cor: '#16A34A' };
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
+
+type Props = { navigation: NativeStackNavigationProp<RootStackParamList, 'Kanban'> };
+
+export default function KanbanScreen({ navigation }: Props) {
+  const [itens, setItens]             = useState<KanbanItem[]>(mockKanban);
+  const [rodoviaFiltro, setRodoviaFiltro] = useState('Todas');
+  const [dropRodovia, setDropRodovia] = useState(false);
+
+  const [sidebarAberta, setSidebarAberta] = useState(true);
+  const [hoverSide, setHoverSide]         = useState<string | null>(null);
+  const [showNotif, setShowNotif]         = useState(false);
+  const [showAllNotif, setShowAllNotif]   = useState(false);
+  const [showLogout, setShowLogout]       = useState(false);
+
+  const [menuCard, setMenuCard]           = useState<string | null>(null);
+  const [menuCol, setMenuCol]             = useState<string | null>(null);
+  const [draggingId, setDraggingId]       = useState<string | null>(null);
+  const [dragOverCol, setDragOverCol]     = useState<string | null>(null);
+
+  const [cardDetalhe, setCardDetalhe]     = useState<KanbanItem | null>(null);
+  const [detObs, setDetObs]               = useState('');
+  const [modalCriar, setModalCriar]       = useState(false);
+  const [itemEditando, setItemEditando]   = useState<KanbanItem | null>(null);
+  const [confirmarExcluir, setConfirmarExcluir] = useState<KanbanItem | null>(null);
+  const [cardFotos, setCardFotos]             = useState<Record<string, string>>({});
+  const [savedId, setSavedId]                 = useState<string | null>(null);
+  const wasDragging                           = useRef(false);
+  const ghostRef                              = useRef<any>(null);
+
+  // quick-add state per column
+  const [quickAddCol, setQuickAddCol]     = useState<string | null>(null);
+  const [quickNome, setQuickNome]         = useState('');
+
+  // form
+  const [fEquipe,      setFEquipe]      = useState('');
+  const [fRodovia,     setFRodovia]     = useState('BR-116');
+  const [fKmInicio,    setFKmInicio]    = useState('');
+  const [fKmFim,       setFKmFim]       = useState('');
+  const [fVegetacao,   setFVegetacao]   = useState(VEGETACAO_OPTS[0]);
+  const [fAltura,      setFAltura]      = useState('');
+  const [fResponsavel, setFResponsavel] = useState('');
+  const [fData,        setFData]        = useState('');
+  const [fUltResp,     setFUltResp]     = useState('');
+
+  const filtrados = useMemo(
+    () => rodoviaFiltro === 'Todas' ? itens : itens.filter((i) => i.rodovia === rodoviaFiltro),
+    [itens, rodoviaFiltro],
+  );
+  function colItens(col: typeof COLUNAS[0]) {
+    if (col.severidade === null) return filtrados.filter((i) => i.severidade === 'sem_ocorrencia');
+    return filtrados.filter((i) => i.severidade === col.severidade);
+  }
+
+  // ── Image upload (web) ────────────────────────────────────────────────────
+  function pickImage(itemId: string) {
+    const input = (document as any).createElement('input');
+    input.type = 'file';
+    input.accept = 'image/png,image/jpeg,image/jpg';
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const reader = new (window as any).FileReader();
+      reader.onload = (ev: any) => {
+        const uri: string = ev.target?.result;
+        if (uri) setCardFotos((p) => ({ ...p, [itemId]: uri }));
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  }
+
+  // ── Drag & Drop ──────────────────────────────────────────────────────────
+  // Threshold: move < 6px = click (abre detalhe), move ≥ 6px = arrasta card
+  function handleCardPointerDown(e: any, item: KanbanItem) {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let dragActive = false;
+    let rafId: number | null = null;
+
+    // Coleta rects das colunas uma vez só (antes de qualquer render)
+    const cols = COLUNAS.map((col) => {
+      const el = (document as any).getElementById(`kancol-${col.id}`);
+      return { col, rect: el ? (el.getBoundingClientRect() as DOMRect) : null };
+    });
+
+    function createGhost() {
+      const sc = sevCor(item.severidade);
+      const g = (document as any).createElement('div');
+      g.innerHTML = `
+        <div style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:3px">${item.nomeEquipe}</div>
+        <div style="font-size:11px;color:#64748B">${item.rodovia} · KM ${item.kmInicio}.0 → ${item.kmFim}.0</div>
+        <div style="font-size:10px;color:#94A3B8;margin-top:2px">${item.tipoVegetacao}</div>
+      `;
+      g.style.cssText = [
+        'position:fixed', 'top:0', 'left:0', 'width:264px',
+        `transform:translate(${startX - 132}px,${startY - 44}px) rotate(2deg) scale(1.04)`,
+        'background:#fff', 'border-radius:10px', 'padding:12px 14px 10px',
+        `border-top:4px solid ${sc}`,
+        'box-shadow:0 20px 56px rgba(0,0,0,0.28)',
+        'pointer-events:none', 'z-index:99999', 'opacity:0.95',
+        'font-family:system-ui,sans-serif',
+        'will-change:transform', 'transition:none',
+      ].join(';');
+      (document as any).body.appendChild(g);
+      ghostRef.current = g;
+    }
+
+    function onMouseMove(me: MouseEvent) {
+      const dx = me.clientX - startX;
+      const dy = me.clientY - startY;
+
+      if (!dragActive && Math.sqrt(dx * dx + dy * dy) > 6) {
+        dragActive = true;
+        wasDragging.current = true;
+        createGhost();
+        setDraggingId(item.id);
+      }
+
+      if (dragActive && ghostRef.current) {
+        if (rafId !== null) cancelAnimationFrame(rafId);
+        const cx = me.clientX;
+        const cy = me.clientY;
+        rafId = requestAnimationFrame(() => {
+          if (ghostRef.current) {
+            ghostRef.current.style.transform =
+              `translate(${cx - 132}px,${cy - 44}px) rotate(2deg) scale(1.04)`;
+          }
+          const over = cols.find(({ rect }) =>
+            rect && cx >= rect.left && cx <= rect.right &&
+                    cy >= rect.top  && cy <= rect.bottom,
+          );
+          setDragOverCol(over?.col.id ?? null);
+        });
+      }
+    }
+
+    function onMouseUp(ue: MouseEvent) {
+      (document as any).removeEventListener('mousemove', onMouseMove);
+      (document as any).removeEventListener('mouseup', onMouseUp);
+      if (rafId !== null) cancelAnimationFrame(rafId);
+
+      if (dragActive) {
+        if (ghostRef.current) {
+          (document as any).body.removeChild(ghostRef.current);
+          ghostRef.current = null;
+        }
+        const over = cols.find(({ rect }) =>
+          rect && ue.clientX >= rect.left && ue.clientX <= rect.right &&
+                  ue.clientY >= rect.top  && ue.clientY <= rect.bottom,
+        );
+        if (over) {
+          const targetSev: SeveridadeVegetacao = over.col.severidade ?? 'sem_ocorrencia';
+          setItens((prev) => prev.map((i) => i.id === item.id ? { ...i, severidade: targetSev } : i));
+        }
+        setDraggingId(null);
+        setDragOverCol(null);
+        setTimeout(() => { wasDragging.current = false; }, 80);
+      } else {
+        // Movimento < 6px → era um clique, abre o detalhe
+        setMenuCard(null);
+        abrirDetalhe(item);
+      }
+    }
+
+    (document as any).addEventListener('mousemove', onMouseMove);
+    (document as any).addEventListener('mouseup', onMouseUp);
+  }
+
+  // ── CRUD ──────────────────────────────────────────────────────────────────
+  function abrirDetalhe(item: KanbanItem) { setMenuCard(null); setCardDetalhe(item); setDetObs(item.observacao); }
+  function salvarObs() {
+    if (!cardDetalhe) return;
+    setItens((p) => p.map((i) => i.id === cardDetalhe.id ? { ...i, observacao: detObs } : i));
+    setCardDetalhe((c) => c ? { ...c, observacao: detObs } : null);
+    setSavedId(cardDetalhe.id);
+    setTimeout(() => setSavedId(null), 2000);
+  }
+
+  function abrirEditar(item: KanbanItem) {
+    setMenuCard(null); setCardDetalhe(null); setItemEditando(item);
+    setFEquipe(item.nomeEquipe); setFRodovia(item.rodovia);
+    setFKmInicio(String(item.kmInicio)); setFKmFim(String(item.kmFim));
+    setFVegetacao(item.tipoVegetacao); setFAltura(String(item.alturaAtual));
+    setFResponsavel(item.responsavel);
+    setFData(item.ultimoServico?.data ?? ''); setFUltResp(item.ultimoServico?.responsavel ?? '');
+    setModalCriar(true);
+  }
+
+  function abrirCriar() {
+    setItemEditando(null);
+    setFEquipe(''); setFRodovia('BR-116'); setFKmInicio(''); setFKmFim('');
+    setFVegetacao(VEGETACAO_OPTS[0]); setFAltura(''); setFResponsavel(''); setFData(''); setFUltResp('');
+    setModalCriar(true);
+  }
+
+  function handleQuickAdd(sev: SeveridadeVegetacao | null) {
+    if (!quickNome.trim()) { setQuickAddCol(null); return; }
+    const sevFinal: SeveridadeVegetacao = sev ?? 'leve';
+    const id = `K${String(itens.length + 1).padStart(2, '0')}`;
+    setItens((p) => [{ id, equipeId: '', nomeEquipe: quickNome.trim(), rodovia: 'BR-116', kmInicio: 0, kmFim: 5,
+      tipoVegetacao: VEGETACAO_OPTS[0], alturaAtual: 10, severidade: sevFinal, responsavel: '', observacao: '', ultimoServico: null,
+    }, ...p]);
+    setQuickNome(''); setQuickAddCol(null);
+  }
+
+  function handleSalvar() {
+    if (!fEquipe.trim() || !fKmInicio.trim() || !fKmFim.trim()) {
+      Alert.alert('Atenção', 'Preencha os campos obrigatórios.');
+      return;
+    }
+    const alt = parseFloat(fAltura) || 0;
+    const sev: SeveridadeVegetacao = fAltura.trim() ? calcSeveridade(alt) : 'leve';
+    const ult = fData.trim() ? { data: fData.trim(), responsavel: fUltResp.trim() } : null;
+    setModalCriar(false);
+    if (itemEditando) {
+      setItens((p) => p.map((i) => i.id === itemEditando.id ? {
+        ...i, nomeEquipe: fEquipe.trim(), rodovia: fRodovia,
+        kmInicio: parseFloat(fKmInicio) || 0, kmFim: parseFloat(fKmFim) || 0,
+        tipoVegetacao: fVegetacao, alturaAtual: alt, severidade: sev,
+        responsavel: fResponsavel.trim(), ultimoServico: ult,
+      } : i));
+    } else {
+      const id = `K${String(itens.length + 1).padStart(2, '0')}`;
+      setItens((p) => [{ id, equipeId: '', nomeEquipe: fEquipe.trim(), rodovia: fRodovia,
+        kmInicio: parseFloat(fKmInicio) || 0, kmFim: parseFloat(fKmFim) || 0,
+        tipoVegetacao: fVegetacao, alturaAtual: alt, severidade: sev,
+        responsavel: fResponsavel.trim(), observacao: '', ultimoServico: ult,
+      }, ...p]);
+    }
+  }
+
+  function excluir(item: KanbanItem) { setMenuCard(null); setCardDetalhe(null); setConfirmarExcluir(item); }
+  function confirmarDelete() {
+    if (confirmarExcluir) { setItens((p) => p.filter((i) => i.id !== confirmarExcluir.id)); setConfirmarExcluir(null); }
+  }
+  function limparColuna(sev: SeveridadeVegetacao | null) {
+    setMenuCol(null);
+    if (sev !== null) setItens((p) => p.filter((i) => i.severidade !== sev));
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  return (
+    <View style={s.root}>
+      <ImageBackground source={bgRoxo} style={StyleSheet.absoluteFill} resizeMode="cover" imageStyle={s.bgFill} />
+
+      {/* ── HEADER ─────────────────────────────────────────────────────────── */}
+      <View style={s.header}>
+        <View style={s.hLeft}>
+          <Image source={logoNeg} style={s.hLogo} resizeMode="contain" />
+          <TouchableOpacity onPress={() => setSidebarAberta((v) => !v)}>
+            <Ionicons name="menu" size={22} color="rgba(255,255,255,0.9)" />
+          </TouchableOpacity>
+        </View>
+        <View style={s.hRight}>
+          <View style={s.hIconPill}>
+            <TouchableOpacity style={s.hPillBtn}>
+              <Ionicons name="sunny-outline" size={17} color="rgba(255,255,255,0.85)" />
+            </TouchableOpacity>
+            <View style={s.hPillDivider} />
+            <TouchableOpacity style={s.hPillBtn} onPress={() => setShowNotif((v) => !v)}>
+              <View>
+                <Ionicons name="notifications-outline" size={17} color={showNotif ? '#fff' : 'rgba(255,255,255,0.85)'} />
+                <View style={s.notifDot} />
+              </View>
+            </TouchableOpacity>
+            <View style={s.hPillDivider} />
+            <TouchableOpacity style={s.hPillBtn}>
+              <Ionicons name="settings-outline" size={17} color="rgba(255,255,255,0.85)" />
+            </TouchableOpacity>
+            <View style={s.hPillDivider} />
+            <TouchableOpacity style={s.hPillBtn} onPress={() => setShowLogout(true)}>
+              <MaterialIcons name="logout" size={17} color="rgba(255,255,255,0.85)" />
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity style={s.hAvatar}>
+            <Image source={perfilLogo} style={s.hAvatarImg} resizeMode="cover" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* ── BODY ───────────────────────────────────────────────────────────── */}
+      <View style={s.body}>
+
+        {/* Sidebar */}
+        {sidebarAberta && (
+          <View style={s.sidebar}>
+            {[
+              { icon: 'grid-outline',      label: 'Dashboard',    onPress: undefined,                                ativo: false },
+              { icon: 'people-outline',    label: 'Equipes',      onPress: () => navigation.navigate('Equipes'),     ativo: false },
+              { icon: 'albums-outline',    label: 'Kanban',       onPress: undefined,                                ativo: true  },
+              { icon: 'warning-outline',   label: 'Ocorrências',  onPress: () => navigation.navigate('Ocorrencias'), ativo: false },
+              { icon: 'map-outline',       label: 'Trechos',      onPress: undefined,                                ativo: false },
+              { icon: 'calendar-outline',  label: 'Planejamento', onPress: undefined,                                ativo: false },
+              { icon: 'bar-chart-outline', label: 'Relatórios',   onPress: undefined,                                ativo: false },
+              { icon: 'settings-outline',  label: 'Config.',      onPress: undefined,                                ativo: false },
+            ].map((item) => {
+              const hov = hoverSide === item.label && !item.ativo;
+              return (
+                <Pressable key={item.label}
+                  style={[s.sideItem, item.ativo && s.sideItemAtivo, hov && s.sideItemHover]}
+                  onPress={item.onPress} onHoverIn={() => setHoverSide(item.label)} onHoverOut={() => setHoverSide(null)}>
+                  <View style={s.sideItemIcon}>
+                    <Ionicons name={item.icon as any} size={18}
+                      color={item.ativo ? '#fff' : hov ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.5)'} />
+                  </View>
+                  <Text style={[s.sideLabel, item.ativo && s.sideLabelAtivo, hov && s.sideLabelHover]}>{item.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+
+        {/* ── Kanban área ── */}
+        <View style={s.kanbanArea}>
+
+          {/* Sub-header do kanban */}
+          <View style={s.subHeader}>
+            <View>
+              <Text style={s.titulo}>Visibilidade das Equipes</Text>
+              <Text style={s.subtitulo}>Acompanhe a viabilidade e o progresso das equipes operacionais</Text>
+            </View>
+            <View style={s.subHeaderRight}>
+              {/* Filtro rodovias */}
+              <View style={s.dropWrap}>
+                <TouchableOpacity style={[s.dropdown, dropRodovia && s.dropdownOpen]}
+                  onPress={() => setDropRodovia((v) => !v)}>
+                  <Text style={s.dropLbl}>Rodovias</Text>
+                  <Text style={s.dropVal}>{rodoviaFiltro}</Text>
+                  <Ionicons name={dropRodovia ? 'chevron-up' : 'chevron-down'} size={11} color="rgba(255,255,255,0.6)" />
+                </TouchableOpacity>
+                {dropRodovia && (
+                  <View style={s.dropMenu}>
+                    {RODOVIAS_FILTRO.map((r) => (
+                      <TouchableOpacity key={r} style={[s.dropItem, rodoviaFiltro === r && s.dropItemOn]}
+                        onPress={() => { setRodoviaFiltro(r); setDropRodovia(false); }}>
+                        <Text style={[s.dropItemTxt, rodoviaFiltro === r && s.dropItemTxtOn]}>{r}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+
+              <TouchableOpacity style={s.btnCriar} onPress={abrirCriar}>
+                <Ionicons name="add" size={16} color="#fff" />
+                <Text style={s.btnCriarTxt}>Nova Ocorrência</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Board: columns em horizontal scroll */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}
+            style={s.boardScroll} contentContainerStyle={s.boardContent}>
+            {COLUNAS.map((col) => {
+              const cards      = colItens(col);
+              const isDragOver = dragOverCol === col.id && draggingId !== null;
+              const isMenuCol  = menuCol === col.id;
+              return (
+                <View
+                  key={col.id}
+                  style={[s.column, isDragOver && { borderColor: col.cor, borderWidth: 2 }]}
+                  {...({ id: `kancol-${col.id}` } as any)}
+                >
+                  {/* Column header */}
+                  <View style={s.colHeader}>
+                    <View style={[s.colAccent, { backgroundColor: col.cor }]} />
+                    <Text style={s.colTitle} numberOfLines={1}>{col.label}</Text>
+                    <View style={[s.colCount, { backgroundColor: col.cor + '33' }]}>
+                      <Text style={[s.colCountTxt, { color: col.cor }]}>{cards.length}</Text>
+                    </View>
+                    <View style={{ position: 'relative' }}>
+                      <TouchableOpacity style={s.colMenuBtn} onPress={() => setMenuCol(isMenuCol ? null : col.id)}>
+                        <Ionicons name="ellipsis-horizontal" size={15} color="rgba(255,255,255,0.6)" />
+                      </TouchableOpacity>
+                      {isMenuCol && (
+                        <View style={s.colOptMenu}>
+                          <TouchableOpacity style={s.colOptItem}
+                            onPress={() => { setMenuCol(null); abrirCriar(); }}>
+                            <Ionicons name="add-outline" size={14} color="#334155" />
+                            <Text style={s.colOptTxt}>Adicionar cartão</Text>
+                          </TouchableOpacity>
+                          <View style={s.optDivider} />
+                          <TouchableOpacity style={s.colOptItem}
+                            onPress={() => limparColuna(col.severidade)}>
+                            <Ionicons name="trash-outline" size={14} color={colors.error} />
+                            <Text style={[s.colOptTxt, { color: colors.error }]}>Limpar coluna</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Cards list (scrollable) */}
+                  <ScrollView style={s.colScroll} showsVerticalScrollIndicator={false}
+                    contentContainerStyle={s.colScrollContent}>
+
+                    {cards.length === 0 && (
+                      <View style={[s.emptySlot, isDragOver && { borderColor: col.cor, backgroundColor: col.cor + '10' }]}>
+                        <Ionicons name="albums-outline" size={22} color={isDragOver ? col.cor : 'rgba(255,255,255,0.2)'} />
+                        <Text style={[s.emptySlotTxt, isDragOver && { color: col.cor }]}>
+                          {isDragOver ? 'Soltar aqui' : 'Sem registros'}
+                        </Text>
+                      </View>
+                    )}
+
+                    {cards.map((item) => {
+                      const sc   = sevCor(item.severidade);
+                      const sb   = sevBg(item.severidade);
+                      const isDragging = draggingId === item.id;
+                      const isMenu = menuCard === item.id;
+                      const vegCor = VEG_COR[item.tipoVegetacao] ?? '#94A3B8';
+                      const rodCor = RODOVIA_COR[item.rodovia] ?? '#6366F1';
+
+                      return (
+                        <View
+                          key={item.id}
+                          style={[s.card, isDragging && s.cardDragging]}
+                          {...({
+                            onMouseDown: (e: any) => handleCardPointerDown(e, item),
+                            style: [s.card, isDragging && s.cardDragging, { cursor: isDragging ? 'grabbing' : 'grab', userSelect: 'none' }],
+                          } as any)}
+                        >
+                          {/* Color label strips (Trello-style) */}
+                          <View style={s.cardLabels}>
+                            <View style={[s.labelStrip, { backgroundColor: sc }]} />
+                            <View style={[s.labelStrip, { backgroundColor: rodCor }]} />
+                            <View style={[s.labelStrip, { backgroundColor: vegCor }]} />
+                          </View>
+
+                          {/* Card body — View (sem TouchableOpacity) para não bloquear o drag */}
+                          <View style={s.cardBody}>
+                            <View style={s.cardTopRow}>
+                              <Text style={s.cardNome} numberOfLines={2}>{item.nomeEquipe}</Text>
+                              <View style={{ position: 'relative' }}>
+                                <TouchableOpacity
+                                  style={s.cardMenuBtn}
+                                  onPress={() => setMenuCard(isMenu ? null : item.id)}
+                                  {...({ onMouseDown: (e: any) => e.stopPropagation() } as any)}
+                                >
+                                  <Ionicons name="ellipsis-horizontal" size={14} color="#94A3B8" />
+                                </TouchableOpacity>
+                                {isMenu && (
+                                  <View style={s.cardOptMenu}>
+                                    <TouchableOpacity style={s.colOptItem}
+                                      onPress={() => abrirDetalhe(item)}
+                                      {...({ onMouseDown: (e: any) => e.stopPropagation() } as any)}>
+                                      <Ionicons name="eye-outline" size={14} color="#334155" />
+                                      <Text style={s.colOptTxt}>Ver detalhes</Text>
+                                    </TouchableOpacity>
+                                    <View style={s.optDivider} />
+                                    <TouchableOpacity style={s.colOptItem}
+                                      onPress={() => abrirEditar(item)}
+                                      {...({ onMouseDown: (e: any) => e.stopPropagation() } as any)}>
+                                      <Ionicons name="create-outline" size={14} color="#334155" />
+                                      <Text style={s.colOptTxt}>Editar</Text>
+                                    </TouchableOpacity>
+                                    <View style={s.optDivider} />
+                                    <TouchableOpacity style={s.colOptItem}
+                                      onPress={() => excluir(item)}
+                                      {...({ onMouseDown: (e: any) => e.stopPropagation() } as any)}>
+                                      <Ionicons name="trash-outline" size={14} color={colors.error} />
+                                      <Text style={[s.colOptTxt, { color: colors.error }]}>Excluir</Text>
+                                    </TouchableOpacity>
+                                  </View>
+                                )}
+                              </View>
+                            </View>
+
+                            <Text style={s.cardKm}>{item.rodovia}  ·  KM {item.kmInicio}.0 → {item.kmFim}.0</Text>
+                            <Text style={s.cardVeg} numberOfLines={1}>{item.tipoVegetacao}</Text>
+
+                            {/* Footer */}
+                            <View style={s.cardFooter}>
+                              <View style={[s.cardSevPill, { backgroundColor: sb }]}>
+                                <View style={[s.cardSevDot, { backgroundColor: sc }]} />
+                                <Text style={[s.cardSevTxt, { color: sc }]}>{sevLabel(item.severidade)}</Text>
+                              </View>
+                              <View style={s.cardAlt}>
+                                <Ionicons name="leaf-outline" size={11} color="#94A3B8" />
+                                <Text style={s.cardAltTxt}>{item.alturaAtual} cm</Text>
+                              </View>
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </ScrollView>
+
+                  {/* Quick add */}
+                  {quickAddCol === col.id ? (
+                    <View style={s.quickAdd}>
+                      <TextInput
+                        style={s.quickInput}
+                        placeholder="Nome da equipe..."
+                        placeholderTextColor="rgba(255,255,255,0.4)"
+                        value={quickNome}
+                        onChangeText={setQuickNome}
+                        autoFocus
+                        onSubmitEditing={() => handleQuickAdd(col.severidade)}
+                      />
+                      <View style={s.quickBtns}>
+                        <TouchableOpacity style={s.quickBtnAdd} onPress={() => handleQuickAdd(col.severidade)}>
+                          <Text style={s.quickBtnAddTxt}>Adicionar</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => { setQuickAddCol(null); setQuickNome(''); }}>
+                          <Ionicons name="close" size={18} color="rgba(255,255,255,0.5)" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ) : (
+                    <TouchableOpacity style={s.colAddBtn}
+                      onPress={() => { setQuickAddCol(col.id); setQuickNome(''); }}>
+                      <Ionicons name="add" size={15} color="rgba(255,255,255,0.55)" />
+                      <Text style={s.colAddTxt}>Adicionar cartão</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              );
+            })}
+          </ScrollView>
+        </View>
+      </View>
+
+      {/* ── NOTIF POPUP ──────────────────────────────────────────────────────── */}
+      {showNotif && (
+        <View style={s.notifPanel}>
+          <View style={s.notifHeader}>
+            <Text style={s.notifTitulo}>Notificações</Text>
+            <TouchableOpacity onPress={() => setShowNotif(false)}>
+              <Ionicons name="close" size={18} color="#94A3B8" />
+            </TouchableOpacity>
+          </View>
+          {NOTIFICACOES.map((n) => (
+            <View key={n.id} style={s.notifItem}>
+              <View style={[s.notifCircle, { backgroundColor: n.cor }]} />
+              <View style={s.notifTextoBox}>
+                <View style={s.notifTitleRow}>
+                  <Text style={s.notifTituloPill}>{n.titulo}</Text>
+                  <Text style={s.notifTempo}>{n.tempo}</Text>
+                </View>
+                <Text style={s.notifDesc} numberOfLines={2}>{n.desc}</Text>
+              </View>
+            </View>
+          ))}
+          <TouchableOpacity style={s.notifVerTodos}
+            onPress={() => { setShowNotif(false); setShowAllNotif(true); }}>
+            <Text style={s.notifVerTodosTxt}>Ver todas as notificações</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ── MODAL TODAS NOTIFICAÇÕES ─────────────────────────────────────────── */}
+      <Modal visible={showAllNotif} transparent animationType="fade">
+        <View style={s.overlay}>
+          <View style={s.allNotifCard}>
+            <View style={s.allNotifHeader}>
+              <Text style={s.allNotifTitulo}>Todas as Notificações</Text>
+              <TouchableOpacity onPress={() => setShowAllNotif(false)}>
+                <Ionicons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {NOTIFICACOES.map((n) => (
+                <View key={n.id} style={s.allNotifItem}>
+                  <View style={[s.notifCircle, { backgroundColor: n.cor }]} />
+                  <View style={s.notifTextoBox}>
+                    <View style={s.notifTitleRow}>
+                      <Text style={s.notifTituloPill}>{n.titulo}</Text>
+                      <Text style={s.notifTempo}>{n.tempo}</Text>
+                    </View>
+                    <Text style={s.notifDesc}>{n.desc}</Text>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+            <TouchableOpacity style={s.allNotifFechar} onPress={() => setShowAllNotif(false)}>
+              <Text style={s.allNotifFecharTxt}>Fechar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── MODAL LOGOUT ────────────────────────────────────────────────────── */}
+      <Modal visible={showLogout} transparent animationType="fade">
+        <View style={s.overlay}>
+          <View style={s.smallCard}>
+            <View style={[s.smallIconBox, { backgroundColor: '#EDE9FE' }]}>
+              <MaterialIcons name="logout" size={26} color={colors.primary} />
+            </View>
+            <Text style={s.smallTitulo}>Encerrar sessão</Text>
+            <Text style={s.smallDesc}>Tem certeza que deseja sair?{'\n'}Você será redirecionado para o login.</Text>
+            <View style={s.smallBtns}>
+              <TouchableOpacity style={s.smallBtnCancel} onPress={() => setShowLogout(false)}>
+                <Text style={s.smallBtnCancelTxt}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[s.smallBtnConfirm, { backgroundColor: colors.primary }]}
+                onPress={() => navigation.replace('Login')}>
+                <MaterialIcons name="logout" size={14} color="#fff" />
+                <Text style={s.smallBtnConfirmTxt}>Sair</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── MODAL DETALHE ───────────────────────────────────────────────────── */}
+      <Modal visible={cardDetalhe !== null} transparent animationType="fade">
+        <View style={s.overlay}>
+          {cardDetalhe && (() => {
+            const ia = getIA(cardDetalhe);
+            const sc = sevCor(cardDetalhe.severidade);
+            const sb = sevBg(cardDetalhe.severidade);
+            return (
+              <View style={s.detalheCard}>
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 8 }}>
+                  <View style={s.detHeader}>
+                    <View style={[s.detIdChip, { backgroundColor: sb }]}>
+                      <Text style={[s.detId, { color: sc }]}>{cardDetalhe.id}</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => setCardDetalhe(null)}>
+                      <Ionicons name="close" size={20} color="#94A3B8" />
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={s.detNome}>{cardDetalhe.nomeEquipe}</Text>
+                  <View style={s.detMetaRow}>
+                    <View style={[s.detSevChip, { backgroundColor: sb }]}>
+                      <View style={[s.detSevDot, { backgroundColor: sc }]} />
+                      <Text style={[s.detSevLabel, { color: sc }]}>{sevLabel(cardDetalhe.severidade)}</Text>
+                    </View>
+                    <Text style={s.detRodovia}>{cardDetalhe.rodovia}  ·  KM {cardDetalhe.kmInicio}.0 → {cardDetalhe.kmFim}.0</Text>
+                  </View>
+
+                  <View style={s.secCard}>
+                    <View style={[s.secIconBox, { backgroundColor: '#EDE9FE' }]}>
+                      <Ionicons name="camera-outline" size={19} color={colors.primary} />
+                    </View>
+                    <View style={s.secContent}>
+                      <Text style={s.secTitle}>Foto do trecho</Text>
+                      <Text style={s.secDesc}>Adicione uma imagem atual para análise.</Text>
+                      {cardFotos[cardDetalhe.id] ? (
+                        <View style={s.uploadPreviewWrap}>
+                          <Image source={{ uri: cardFotos[cardDetalhe.id] }} style={s.uploadPreview} resizeMode="cover" />
+                          <TouchableOpacity style={s.uploadTrocarBtn} onPress={() => pickImage(cardDetalhe.id)}>
+                            <Ionicons name="refresh-outline" size={13} color={colors.primary} />
+                            <Text style={s.uploadTrocarTxt}>Trocar imagem</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <TouchableOpacity style={s.uploadArea} onPress={() => pickImage(cardDetalhe.id)}>
+                          <Ionicons name="cloud-upload-outline" size={24} color="#CBD5E1" />
+                          <Text style={s.uploadLbl}>PNG, JPG ou JPEG</Text>
+                          <View style={s.uploadBtn}>
+                            <Text style={s.uploadBtnTxt}>Enviar Imagem</Text>
+                          </View>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+
+                  <View style={s.secCard}>
+                    <View style={[s.secIconBox, { backgroundColor: '#EFF6FF' }]}>
+                      <Ionicons name="document-text-outline" size={19} color="#3B82F6" />
+                    </View>
+                    <View style={s.secContent}>
+                      <Text style={s.secTitle}>Observação</Text>
+                      <Text style={s.secDesc}>Registre as condições atuais do trecho.</Text>
+                      <TextInput style={s.obsInput} placeholder="Digite suas observações..."
+                        placeholderTextColor="#CBD5E1" multiline numberOfLines={3}
+                        value={detObs} onChangeText={setDetObs} />
+                      <Text style={s.obsCount}>{detObs.length}/200</Text>
+                    </View>
+                  </View>
+
+                  <View style={s.secCard}>
+                    <View style={[s.secIconBox, { backgroundColor: '#FFF7ED' }]}>
+                      <Ionicons name="construct-outline" size={19} color="#F97316" />
+                    </View>
+                    <View style={s.secContent}>
+                      <Text style={s.secTitle}>Último serviço</Text>
+                      <Text style={s.secDesc}>Informações do último serviço realizado.</Text>
+                      {cardDetalhe.ultimoServico ? (
+                        <View style={s.servicoBox}>
+                          <View style={s.servicoRow}>
+                            <Text style={s.servicoLbl}>Data</Text>
+                            <Text style={s.servicoVal}>{cardDetalhe.ultimoServico.data}</Text>
+                          </View>
+                          <View style={[s.servicoRow, { marginBottom: 0 }]}>
+                            <Text style={s.servicoLbl}>Responsável</Text>
+                            <Text style={s.servicoVal}>{cardDetalhe.ultimoServico.responsavel}</Text>
+                          </View>
+                        </View>
+                      ) : (
+                        <Text style={s.semServico}>Nenhum serviço registrado</Text>
+                      )}
+                    </View>
+                  </View>
+
+                  <View style={s.iaCard}>
+                    <View style={s.iaIconBox}>
+                      <Ionicons name="sparkles" size={19} color="#fff" />
+                    </View>
+                    <View style={s.secContent}>
+                      <Text style={s.iaTitulo}>Previsão da IA</Text>
+                      <Text style={s.iaDesc}>Análise baseada em dados históricos e condição do trecho.</Text>
+                      <View style={[s.iaBadge, { borderColor: ia.cor, backgroundColor: ia.cor + '15' }]}>
+                        <Ionicons name="warning-outline" size={13} color={ia.cor} />
+                        <Text style={[s.iaBadgeTxt, { color: ia.cor }]}>{ia.texto}</Text>
+                      </View>
+                    </View>
+                  </View>
+                </ScrollView>
+                <View style={s.detFooter}>
+                  <TouchableOpacity style={s.detBtnDel} onPress={() => excluir(cardDetalhe)}>
+                    <Ionicons name="trash-outline" size={14} color={colors.error} />
+                    <Text style={s.detBtnDelTxt}>Excluir</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={s.detBtnEdit} onPress={() => abrirEditar(cardDetalhe)}>
+                    <Ionicons name="create-outline" size={14} color={colors.primary} />
+                    <Text style={s.detBtnEditTxt}>Editar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[s.detBtnSave, savedId === cardDetalhe.id && { backgroundColor: '#16A34A' }]}
+                    onPress={salvarObs}>
+                    {savedId === cardDetalhe.id
+                      ? <><Ionicons name="checkmark" size={14} color="#fff" /><Text style={s.detBtnSaveTxt}>Salvo!</Text></>
+                      : <Text style={s.detBtnSaveTxt}>Salvar Informações</Text>
+                    }
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })()}
+        </View>
+      </Modal>
+
+      {/* ── MODAL CRIAR/EDITAR ──────────────────────────────────────────────── */}
+      <Modal visible={modalCriar} transparent animationType="fade">
+        <View style={s.overlay}>
+          <View style={s.modalCard}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 14 }}>
+              <View style={s.modalHead}>
+                <Text style={s.modalTitulo}>{itemEditando ? `Editar ${itemEditando.id}` : 'Nova Ocorrência'}</Text>
+                <TouchableOpacity onPress={() => setModalCriar(false)}>
+                  <Ionicons name="close" size={22} color={colors.secondary} />
+                </TouchableOpacity>
+              </View>
+              {([
+                { label: 'Nome da Equipe',       val: fEquipe,      set: setFEquipe,      ph: 'Ex: Equipe Alfa'    },
+                { label: 'KM Início',            val: fKmInicio,    set: setFKmInicio,    ph: 'Ex: 0'              },
+                { label: 'KM Fim',               val: fKmFim,       set: setFKmFim,       ph: 'Ex: 5'              },
+                { label: 'Altura Atual (cm)',     val: fAltura,      set: setFAltura,      ph: 'Ex: 12'             },
+                { label: 'Responsável',          val: fResponsavel, set: setFResponsavel, ph: 'Ex: Eng. Silva'     },
+                { label: 'Data último serviço',  val: fData,        set: setFData,        ph: 'Ex: 15/05/2026'     },
+                { label: 'Resp. último serviço', val: fUltResp,     set: setFUltResp,     ph: 'Ex: Eng. Pedro'     },
+              ] as const).map((f) => (
+                <View key={f.label} style={s.mField}>
+                  <Text style={s.mLabel}>{f.label}</Text>
+                  <TextInput style={s.mInput} placeholder={f.ph} placeholderTextColor={colors.gray400}
+                    value={f.val} onChangeText={f.set as (t: string) => void} />
+                </View>
+              ))}
+              <View style={s.mField}>
+                <Text style={s.mLabel}>Rodovia</Text>
+                <View style={s.chipRow}>
+                  {RODOVIAS_FORM.map((r) => (
+                    <TouchableOpacity key={r} style={[s.chip, fRodovia === r && s.chipOn]} onPress={() => setFRodovia(r)}>
+                      <Text style={[s.chipTxt, fRodovia === r && s.chipTxtOn]}>{r}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+              <View style={s.mField}>
+                <Text style={s.mLabel}>Tipo de Vegetação</Text>
+                <View style={s.vegGrid}>
+                  {VEGETACAO_OPTS.map((v) => (
+                    <TouchableOpacity key={v} style={[s.chip, fVegetacao === v && s.chipOn]} onPress={() => setFVegetacao(v)}>
+                      <Text style={[s.chipTxt, fVegetacao === v && s.chipTxtOn]}>{v}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+              <View style={s.mFooter}>
+                <TouchableOpacity style={s.mBtnCancel} onPress={() => setModalCriar(false)}>
+                  <Text style={s.mBtnCancelTxt}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={s.mBtnSave} onPress={handleSalvar}>
+                  <Text style={s.mBtnSaveTxt}>{itemEditando ? 'Salvar' : 'Criar'}</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── MODAL EXCLUIR ───────────────────────────────────────────────────── */}
+      <Modal visible={confirmarExcluir !== null} transparent animationType="fade">
+        <View style={s.overlay}>
+          <View style={s.smallCard}>
+            <View style={s.smallIconBox}>
+              <Ionicons name="trash" size={28} color={colors.error} />
+            </View>
+            <Text style={s.smallTitulo}>Excluir ocorrência</Text>
+            <Text style={s.smallDesc}>
+              Tem certeza que deseja excluir{' '}
+              <Text style={{ fontWeight: '700' }}>{confirmarExcluir?.id}</Text>?{'\n'}
+              Esta ação não pode ser desfeita.
+            </Text>
+            <View style={s.smallBtns}>
+              <TouchableOpacity style={s.smallBtnCancel} onPress={() => setConfirmarExcluir(null)}>
+                <Text style={s.smallBtnCancelTxt}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.smallBtnConfirm} onPress={confirmarDelete}>
+                <Ionicons name="trash-outline" size={14} color="#fff" />
+                <Text style={s.smallBtnConfirmTxt}>Excluir</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+// ─── Styles ──────────────────────────────────────────────────────────────────
+const s = StyleSheet.create({
+  root:   { flex: 1, backgroundColor: '#3B0FA6' },
+  bgFill: { width: '100%', height: '100%' },
+
+  // Header
+  header:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'transparent', paddingHorizontal: 22, paddingVertical: 10, zIndex: 10 },
+  hLeft:        { flexDirection: 'row', alignItems: 'center', gap: 18 },
+  hLogo:        { width: 130, height: 36 },
+  hRight:       { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  hIconPill:    { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.08)', overflow: 'hidden' },
+  hPillBtn:     { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
+  hPillDivider: { width: 1, height: 16, backgroundColor: 'rgba(255,255,255,0.15)' },
+  hAvatar:      { width: 36, height: 36, borderRadius: 18, overflow: 'hidden', borderWidth: 2, borderColor: colors.primary },
+  hAvatarImg:   { width: '100%', height: '100%' },
+  notifDot:     { position: 'absolute', top: -2, right: -2, width: 7, height: 7, borderRadius: 4, backgroundColor: '#EF4444', borderWidth: 1, borderColor: '#fff' },
+
+  // Body
+  body: { flex: 1, flexDirection: 'row', paddingLeft: 48, paddingRight: 24, paddingBottom: 16 },
+
+  // Sidebar
+  sidebar:        { width: 160, marginRight: 14, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 12 },
+  sideItem:       { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, marginVertical: 2 },
+  sideItemIcon:   { marginRight: 10 },
+  sideItemAtivo:  { backgroundColor: colors.primary },
+  sideItemHover:  { backgroundColor: 'rgba(255,255,255,0.1)' },
+  sideLabel:      { fontSize: 12, color: 'rgba(255,255,255,0.5)', fontWeight: '500' },
+  sideLabelAtivo: { color: '#fff', fontWeight: '700' },
+  sideLabelHover: { color: 'rgba(255,255,255,0.9)' },
+
+  // Kanban area (replaces white contentCard)
+  kanbanArea: { flex: 1, flexDirection: 'column' },
+
+  // Sub-header (title + filters)
+  subHeader:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingRight: 24 },
+  subHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  titulo:         { fontSize: 18, fontWeight: '700', color: '#fff' },
+  subtitulo:      { fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 2 },
+  btnCriar:       { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.primary, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 9, gap: 6 },
+  btnCriarTxt:    { color: '#fff', fontWeight: '700', fontSize: 12 },
+
+  // Dropdown
+  dropWrap:      { position: 'relative', zIndex: 40 },
+  dropdown:      { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7, minWidth: 130 },
+  dropdownOpen:  { backgroundColor: 'rgba(255,255,255,0.18)', borderColor: 'rgba(255,255,255,0.3)' },
+  dropLbl:       { fontSize: 9, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 0.4 },
+  dropVal:       { fontSize: 13, color: '#fff', fontWeight: '600' },
+  dropMenu:      { position: 'absolute', top: 46, left: 0, right: 0, backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', zIndex: 100, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.15, shadowRadius: 14, elevation: 14 },
+  dropItem:      { paddingHorizontal: 14, paddingVertical: 10 },
+  dropItemOn:    { backgroundColor: '#EDE9FE' },
+  dropItemTxt:   { fontSize: 13, color: colors.secondary },
+  dropItemTxtOn: { color: colors.primary, fontWeight: '600' },
+
+  // Board
+  boardScroll:   { flex: 1 },
+  boardContent:  { flexDirection: 'row', alignItems: 'flex-start', paddingRight: 24 },
+
+  // Column (glass effect)
+  column: {
+    width: 270,
+    marginRight: 12,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.09)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    overflow: 'hidden',
+    maxHeight: 520,
+    flexDirection: 'column',
+  },
+
+  // Column header
+  colHeader:   { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, backgroundColor: 'rgba(0,0,0,0.15)', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
+  colAccent:   { width: 10, height: 10, borderRadius: 5, marginRight: 8 },
+  colTitle:    { flex: 1, fontSize: 12, fontWeight: '700', color: '#fff', letterSpacing: 0.2 },
+  colCount:    { minWidth: 22, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 7, marginRight: 6 },
+  colCountTxt: { fontSize: 11, fontWeight: '800' },
+  colMenuBtn:  { width: 26, height: 26, alignItems: 'center', justifyContent: 'center', borderRadius: 6 },
+
+  // Column options menu
+  colOptMenu: { position: 'absolute', top: 30, right: 0, width: 168, backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 16, elevation: 20, zIndex: 999 },
+  colOptItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, gap: 8 },
+  colOptTxt:  { fontSize: 13, color: '#334155', fontWeight: '500' },
+  optDivider: { height: 1, backgroundColor: '#F1F5F9', marginHorizontal: 8 },
+
+  // Column scroll
+  colScroll:        { flex: 1 },
+  colScrollContent: { padding: 8, gap: 8 },
+
+  // Empty slot
+  emptySlot:    { minHeight: 90, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  emptySlotTxt: { fontSize: 11, color: 'rgba(255,255,255,0.35)', fontWeight: '500' },
+
+  // Card
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.10,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  cardDragging: { opacity: 0.3 },
+  cardLabels:   { flexDirection: 'row', height: 5, borderTopLeftRadius: 10, borderTopRightRadius: 10, overflow: 'hidden' },
+  labelStrip:   { flex: 1, height: 5 },
+  cardBody:     { padding: 10 },
+  cardTopRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 },
+  cardNome:     { flex: 1, fontSize: 13, fontWeight: '700', color: '#1E293B', lineHeight: 18, marginRight: 4 },
+  cardMenuBtn:  { width: 24, height: 24, alignItems: 'center', justifyContent: 'center', borderRadius: 6 },
+  cardOptMenu:  { position: 'absolute', top: 26, right: 0, width: 155, backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 16, elevation: 20, zIndex: 999 },
+  cardKm:       { fontSize: 11, color: '#64748B', fontWeight: '500', marginBottom: 3 },
+  cardVeg:      { fontSize: 10, color: '#94A3B8', marginBottom: 8 },
+  cardFooter:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  cardSevPill:  { flexDirection: 'row', alignItems: 'center', borderRadius: 20, paddingHorizontal: 7, paddingVertical: 3, gap: 4 },
+  cardSevDot:   { width: 6, height: 6, borderRadius: 3 },
+  cardSevTxt:   { fontSize: 10, fontWeight: '700' },
+  cardAlt:      { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  cardAltTxt:   { fontSize: 10, color: '#94A3B8', fontWeight: '600' },
+
+  // Quick-add at bottom of column
+  quickAdd:       { padding: 8, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)' },
+  quickInput:     { backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 8, padding: 8, fontSize: 12, color: '#fff', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', outlineStyle: 'none' } as any,
+  quickBtns:      { flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 8 },
+  quickBtnAdd:    { backgroundColor: colors.primary, borderRadius: 6, paddingHorizontal: 12, paddingVertical: 6 },
+  quickBtnAddTxt: { fontSize: 12, color: '#fff', fontWeight: '600' },
+  colAddBtn:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, gap: 6, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)' },
+  colAddTxt:      { fontSize: 12, color: 'rgba(255,255,255,0.55)', fontWeight: '500' },
+
+  // Notifications
+  notifPanel:      { position: 'absolute', top: 54, right: 72, width: 280, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#EDE9FE', shadowColor: '#5E22F3', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.1, shadowRadius: 16, elevation: 20, zIndex: 200 },
+  notifHeader:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  notifTitulo:     { fontSize: 13, fontWeight: '700', color: colors.secondary },
+  notifItem:       { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
+  notifCircle:     { width: 30, height: 30, borderRadius: 15, marginRight: 10, marginTop: 1 },
+  notifTextoBox:   { flex: 1 },
+  notifTitleRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 },
+  notifTituloPill: { fontSize: 12, fontWeight: '700', color: colors.secondary },
+  notifTempo:      { fontSize: 10, color: '#94A3B8' },
+  notifDesc:       { fontSize: 11, color: '#64748B', lineHeight: 15 },
+  notifVerTodos:   { paddingVertical: 10, alignItems: 'center', borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  notifVerTodosTxt:{ fontSize: 11, color: colors.primary, fontWeight: '700' },
+  allNotifCard:     { backgroundColor: '#fff', borderRadius: 20, width: '100%', maxWidth: 420, maxHeight: 520, overflow: 'hidden' },
+  allNotifHeader:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 22, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  allNotifTitulo:   { fontSize: 16, fontWeight: '700', color: colors.secondary },
+  allNotifItem:     { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 22, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
+  allNotifFechar:   { paddingVertical: 14, alignItems: 'center', borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  allNotifFecharTxt:{ fontSize: 13, color: '#64748B', fontWeight: '600' },
+
+  // Overlay
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+
+  // Small confirm card (logout/delete)
+  smallCard:         { backgroundColor: '#fff', borderRadius: 20, padding: 28, width: '100%', maxWidth: 360, alignItems: 'center', gap: 12 },
+  smallIconBox:      { width: 60, height: 60, borderRadius: 30, backgroundColor: '#FEE2E2', alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  smallTitulo:       { fontSize: 18, fontWeight: '700', color: colors.secondary },
+  smallDesc:         { fontSize: 13, color: '#64748B', textAlign: 'center', lineHeight: 20 },
+  smallBtns:         { flexDirection: 'row', gap: 10, width: '100%', marginTop: 4 },
+  smallBtnCancel:    { flex: 1, paddingVertical: 11, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center' },
+  smallBtnCancelTxt: { color: '#64748B', fontWeight: '500', fontSize: 13 },
+  smallBtnConfirm:   { flex: 1, paddingVertical: 11, borderRadius: 8, backgroundColor: colors.error, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 },
+  smallBtnConfirmTxt:{ color: '#fff', fontWeight: '700', fontSize: 13 },
+
+  // Detail modal
+  detalheCard: { backgroundColor: '#F8FAFC', borderRadius: 20, padding: 20, width: '100%', maxWidth: 460, maxHeight: 580 },
+  detHeader:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  detIdChip:   { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
+  detId:       { fontSize: 12, fontWeight: '800' },
+  detNome:     { fontSize: 22, fontWeight: '800', color: '#0F172A', marginBottom: 8 },
+  detMetaRow:  { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginBottom: 14, gap: 8 },
+  detSevChip:  { flexDirection: 'row', alignItems: 'center', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, gap: 6 },
+  detSevDot:   { width: 8, height: 8, borderRadius: 4 },
+  detSevLabel: { fontSize: 12, fontWeight: '700' },
+  detRodovia:  { fontSize: 12, color: '#94A3B8' },
+
+  secCard:    { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#F1F5F9', padding: 12, marginBottom: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
+  secIconBox: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  secContent: { flex: 1 },
+  secTitle:   { fontSize: 13, fontWeight: '700', color: '#1E293B', marginBottom: 2 },
+  secDesc:    { fontSize: 11, color: '#94A3B8', marginBottom: 8 },
+  uploadArea:       { borderWidth: 1, borderColor: '#E2E8F0', borderStyle: 'dashed', borderRadius: 8, padding: 14, alignItems: 'center', backgroundColor: '#FAFAFA' },
+  uploadLbl:        { fontSize: 10, color: '#CBD5E1', marginTop: 4 },
+  uploadBtn:        { marginTop: 8, backgroundColor: colors.primary, borderRadius: 6, paddingHorizontal: 14, paddingVertical: 5 },
+  uploadBtnTxt:     { fontSize: 11, color: '#fff', fontWeight: '600' },
+  uploadPreviewWrap:{ borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: '#E2E8F0' },
+  uploadPreview:    { width: '100%', height: 140 },
+  uploadTrocarBtn:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 7, backgroundColor: '#F5F3FF' },
+  uploadTrocarTxt:  { fontSize: 11, color: colors.primary, fontWeight: '600' },
+  obsInput:   { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, padding: 10, fontSize: 12, color: colors.secondary, minHeight: 70, textAlignVertical: 'top', outlineStyle: 'none' } as any,
+  obsCount:   { fontSize: 10, color: '#CBD5E1', textAlign: 'right', marginTop: 3 },
+  servicoBox: { backgroundColor: '#F8FAFC', borderRadius: 8, padding: 10 },
+  servicoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
+  servicoLbl: { fontSize: 11, fontWeight: '600', color: '#94A3B8', width: 90 },
+  servicoVal: { fontSize: 12, color: '#1E293B', fontWeight: '600' },
+  semServico: { fontSize: 12, color: '#CBD5E1', fontStyle: 'italic' },
+  iaCard:     { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: colors.primary, borderRadius: 12, padding: 12, marginBottom: 8 },
+  iaIconBox:  { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  iaTitulo:   { fontSize: 13, fontWeight: '700', color: '#fff', marginBottom: 2 },
+  iaDesc:     { fontSize: 11, color: 'rgba(255,255,255,0.65)', marginBottom: 8 },
+  iaBadge:    { flexDirection: 'row', alignItems: 'center', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, alignSelf: 'flex-start', gap: 5 },
+  iaBadgeTxt: { fontSize: 12, fontWeight: '700' },
+
+  detFooter:     { flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 12, marginTop: 4, gap: 8 },
+  detBtnDel:     { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#FECACA', backgroundColor: '#FFF5F5', gap: 5 },
+  detBtnDelTxt:  { fontSize: 12, color: colors.error, fontWeight: '600' },
+  detBtnEdit:    { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#DDD6FE', backgroundColor: '#F5F3FF', gap: 5 },
+  detBtnEditTxt: { fontSize: 12, color: colors.primary, fontWeight: '600' },
+  detBtnSave:    { flex: 1, backgroundColor: colors.primary, borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
+  detBtnSaveTxt: { fontSize: 12, color: '#fff', fontWeight: '700' },
+
+  // Create/Edit modal
+  modalCard:    { backgroundColor: '#fff', borderRadius: 20, padding: 24, width: '100%', maxWidth: 440, maxHeight: 580 },
+  modalHead:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  modalTitulo:  { fontSize: 17, fontWeight: '700', color: colors.secondary },
+  mField:       { gap: 5 },
+  mLabel:       { fontSize: 11, fontWeight: '600', color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.3 },
+  mInput:       { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: colors.secondary, outlineStyle: 'none' } as any,
+  chipRow:      { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  vegGrid:      { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  chip:         { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: '#E2E8F0' },
+  chipOn:       { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipTxt:      { fontSize: 11, color: '#64748B' },
+  chipTxtOn:    { color: '#fff', fontWeight: '600' },
+  mFooter:      { flexDirection: 'row', gap: 10, marginTop: 4 },
+  mBtnCancel:   { flex: 1, paddingVertical: 11, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center' },
+  mBtnCancelTxt:{ color: '#64748B', fontWeight: '500', fontSize: 13 },
+  mBtnSave:     { flex: 1, paddingVertical: 11, borderRadius: 8, backgroundColor: colors.primary, alignItems: 'center' },
+  mBtnSaveTxt:  { color: '#fff', fontWeight: '700', fontSize: 13 },
+});

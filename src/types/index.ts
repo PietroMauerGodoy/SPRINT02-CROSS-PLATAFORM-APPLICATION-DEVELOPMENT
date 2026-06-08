@@ -33,10 +33,28 @@ export type Equipe = {
   responsavel: string;
 };
 
+export type SeveridadeVegetacao = 'sem_ocorrencia' | 'leve' | 'grave' | 'critico';
+
+export type KanbanItem = {
+  id: string;
+  equipeId: string;
+  nomeEquipe: string;
+  rodovia: string;
+  kmInicio: number;
+  kmFim: number;
+  tipoVegetacao: string;
+  alturaAtual: number;
+  severidade: SeveridadeVegetacao;
+  responsavel: string;
+  observacao: string;
+  ultimoServico: { data: string; responsavel: string } | null;
+};
+
 export type RootStackParamList = {
   Login: undefined;
   Ocorrencias: undefined;
   Equipes: undefined;
+  Kanban: undefined;
   Cadastro: undefined;
   Detalhe: { ocorrencia: Ocorrencia };
 };
