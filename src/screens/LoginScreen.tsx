@@ -72,7 +72,7 @@ export default function LoginScreen({ navigation }: Props) {
       setLoading(false);
 
       if (encontrado) {
-        navigation.replace('Ocorrencias');
+        navigation.replace('Equipes');
       } else {
         setErros({ geral: 'Usuário ou senha incorretos. Verifique os dados e tente novamente.' });
       }

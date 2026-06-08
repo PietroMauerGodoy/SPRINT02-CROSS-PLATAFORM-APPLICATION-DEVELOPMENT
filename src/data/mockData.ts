@@ -1,4 +1,4 @@
-import { Ocorrencia, Usuario } from '../types';
+import { Equipe, Ocorrencia, Usuario } from '../types';
 
 export const mockUsuarios: Usuario[] = [
   {
@@ -15,6 +15,19 @@ export const mockUsuarios: Usuario[] = [
     senha: '123456',
     cargo: 'Analista de Segurança',
   },
+];
+
+export const mockEquipes: Equipe[] = [
+  { id: '#01', nome: 'Equipe Alfa',     status: 'ativo',    rodovia: 'BR-116', km: 'Km 50', trechoRodovia: 'Rodoanel Oeste',    responsavel: 'Eng. Pedro'    },
+  { id: '#02', nome: 'Equipe Beta',     status: 'ativo',    rodovia: 'BR-116', km: 'Km 62', trechoRodovia: 'Rodoanel Norte',    responsavel: 'Eng. Pietro'   },
+  { id: '#03', nome: 'Equipe Gama',     status: 'inativo',  rodovia: 'BR-116', km: 'Km 74', trechoRodovia: 'Rodoanel Leste',    responsavel: 'Eng. Lucas'    },
+  { id: '#04', nome: 'Equipe Girassol', status: 'ativo',    rodovia: 'BR-116', km: 'Km 38', trechoRodovia: 'Rodoanel Sudeste',  responsavel: 'Eng. Fernando' },
+  { id: '#05', nome: 'Equipe Vermelha', status: 'ativo',    rodovia: 'BR-116', km: 'Km 45', trechoRodovia: 'Rodoanel Nordeste', responsavel: 'Eng. Samir'    },
+  { id: '#06', nome: 'Equipe Amarela',  status: 'em_campo', rodovia: 'BR-116', km: 'Km 55', trechoRodovia: 'Rodoanel Centro',   responsavel: 'Eng. Ryan'     },
+  { id: '#07', nome: 'Equipe Azul',     status: 'ativo',    rodovia: 'BR-116', km: 'Km 30', trechoRodovia: 'Rodoanel Sul',      responsavel: 'Eng. Patrick'  },
+  { id: '#08', nome: 'Equipe Delta',    status: 'inativo',  rodovia: 'SP-280', km: 'Km 20', trechoRodovia: 'Trecho Castelo',    responsavel: 'Eng. Marcos'   },
+  { id: '#09', nome: 'Equipe Omega',    status: 'em_campo', rodovia: 'SP-280', km: 'Km 35', trechoRodovia: 'Trecho Campinas',   responsavel: 'Eng. Clara'    },
+  { id: '#10', nome: 'Equipe Sigma',    status: 'ativo',    rodovia: 'BR-381', km: 'Km 12', trechoRodovia: 'Contorno Norte',    responsavel: 'Eng. Diana'    },
 ];
 
 export const mockOcorrencias: Ocorrencia[] = [

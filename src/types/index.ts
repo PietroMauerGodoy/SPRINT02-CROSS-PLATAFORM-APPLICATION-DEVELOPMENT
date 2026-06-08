@@ -21,9 +21,22 @@ export type Usuario = {
   avatar?: string;
 };
 
+export type StatusEquipe = 'ativo' | 'inativo' | 'em_campo';
+
+export type Equipe = {
+  id: string;
+  nome: string;
+  status: StatusEquipe;
+  rodovia: string;
+  km: string;
+  trechoRodovia: string;
+  responsavel: string;
+};
+
 export type RootStackParamList = {
   Login: undefined;
   Ocorrencias: undefined;
+  Equipes: undefined;
   Cadastro: undefined;
   Detalhe: { ocorrencia: Ocorrencia };
 };
