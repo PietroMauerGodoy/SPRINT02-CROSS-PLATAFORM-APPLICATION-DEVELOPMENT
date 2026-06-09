@@ -110,6 +110,7 @@ export default function KanbanScreen({ navigation }: Props) {
   const [showLogout, setShowLogout]       = useState(false);
 
   const [menuCard, setMenuCard]           = useState<string | null>(null);
+  const [menuCardPos, setMenuCardPos]     = useState<{ x: number; y: number } | null>(null);
   const [menuCol, setMenuCol]             = useState<string | null>(null);
   const [draggingId, setDraggingId]       = useState<string | null>(null);
   const [dragOverCol, setDragOverCol]     = useState<string | null>(null);
@@ -121,6 +122,9 @@ export default function KanbanScreen({ navigation }: Props) {
   const [confirmarExcluir, setConfirmarExcluir] = useState<KanbanItem | null>(null);
   const [cardFotos, setCardFotos]             = useState<Record<string, string>>({});
   const [savedId, setSavedId]                 = useState<string | null>(null);
+  const [modalAltura, setModalAltura]         = useState<{ item: KanbanItem; targetSev: SeveridadeVegetacao } | null>(null);
+  const [novaAltura, setNovaAltura]           = useState('');
+  const [alturaErro, setAlturaErro]           = useState<string | null>(null);
   const wasDragging                           = useRef(false);
   const ghostRef                              = useRef<any>(null);
 
@@ -250,7 +254,9 @@ export default function KanbanScreen({ navigation }: Props) {
         );
         if (over) {
           const targetSev: SeveridadeVegetacao = over.col.severidade ?? 'sem_ocorrencia';
-          setItens((prev) => prev.map((i) => i.id === item.id ? { ...i, severidade: targetSev } : i));
+          // Abre modal para confirmar a nova altura antes de mover o card
+          setNovaAltura(String(item.alturaAtual));
+          setModalAltura({ item, targetSev });
         }
         setDraggingId(null);
         setDragOverCol(null);
@@ -265,6 +271,37 @@ export default function KanbanScreen({ navigation }: Props) {
     (document as any).addEventListener('mousemove', onMouseMove);
     (document as any).addEventListener('mouseup', onMouseUp);
   }
+
+  // ── Confirmação de altura ao arrastar ─────────────────────────────────────
+  const FAIXA_RANGES: Record<SeveridadeVegetacao, { min: number; max: number; label: string }> = {
+    sem_ocorrencia: { min: 0,  max: 4,   label: '0 – 4 cm'  },
+    leve:           { min: 5,  max: 14,  label: '5 – 14 cm' },
+    grave:          { min: 15, max: 24,  label: '15 – 24 cm'},
+    critico:        { min: 25, max: 999, label: '≥ 25 cm'   },
+  };
+
+  function confirmarNovaAltura() {
+    if (!modalAltura) return;
+    const cm = parseFloat(novaAltura.replace(',', '.'));
+    if (isNaN(cm) || cm < 0) {
+      setAlturaErro('Digite um valor numérico válido.');
+      return;
+    }
+    const faixa = FAIXA_RANGES[modalAltura.targetSev];
+    if (cm < faixa.min || cm > faixa.max) {
+      setAlturaErro(
+        `Para a coluna "${sevLabel(modalAltura.targetSev)}" a altura deve estar entre ${faixa.label}. Você digitou ${cm} cm.`
+      );
+      return;
+    }
+    setAlturaErro(null);
+    setItens((prev) => prev.map((i) =>
+      i.id === modalAltura.item.id ? { ...i, alturaAtual: cm, severidade: calcSeveridade(cm) } : i,
+    ));
+    setModalAltura(null);
+    setNovaAltura('');
+  }
+  function cancelarNovaAltura() { setModalAltura(null); setNovaAltura(''); setAlturaErro(null); }
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
   function abrirDetalhe(item: KanbanItem) { setMenuCard(null); setCardDetalhe(item); setDetObs(item.observacao); }
@@ -294,13 +331,14 @@ export default function KanbanScreen({ navigation }: Props) {
   }
 
   function handleQuickAdd(sev: SeveridadeVegetacao | null) {
-    if (!quickNome.trim()) { setQuickAddCol(null); return; }
-    const sevFinal: SeveridadeVegetacao = sev ?? 'leve';
-    const id = `K${String(itens.length + 1).padStart(2, '0')}`;
-    setItens((p) => [{ id, equipeId: '', nomeEquipe: quickNome.trim(), rodovia: 'BR-116', kmInicio: 0, kmFim: 5,
-      tipoVegetacao: VEGETACAO_OPTS[0], alturaAtual: 10, severidade: sevFinal, responsavel: '', observacao: '', ultimoServico: null,
-    }, ...p]);
+    const nome = quickNome.trim();
     setQuickNome(''); setQuickAddCol(null);
+    // Abre o modal de criação com o nome já preenchido
+    setItemEditando(null);
+    setFEquipe(nome);
+    setFRodovia('BR-116'); setFKmInicio(''); setFKmFim('');
+    setFVegetacao(VEGETACAO_OPTS[0]); setFAltura(''); setFResponsavel(''); setFData(''); setFUltResp('');
+    setModalCriar(true);
   }
 
   function handleSalvar() {
@@ -411,7 +449,10 @@ export default function KanbanScreen({ navigation }: Props) {
         )}
 
         {/* ── Kanban área ── */}
-        <View style={s.kanbanArea}>
+        <View
+          style={s.kanbanArea}
+          onStartShouldSetResponder={() => { setDropRodovia(false); setMenuCard(null); setMenuCol(null); return false; }}
+        >
 
           {/* Sub-header do kanban */}
           <View style={s.subHeader}>
@@ -440,10 +481,6 @@ export default function KanbanScreen({ navigation }: Props) {
                 )}
               </View>
 
-              <TouchableOpacity style={s.btnCriar} onPress={abrirCriar}>
-                <Ionicons name="add" size={16} color="#fff" />
-                <Text style={s.btnCriarTxt}>Nova Ocorrência</Text>
-              </TouchableOpacity>
             </View>
           </View>
 
@@ -506,7 +543,6 @@ export default function KanbanScreen({ navigation }: Props) {
                       const sc   = sevCor(item.severidade);
                       const sb   = sevBg(item.severidade);
                       const isDragging = draggingId === item.id;
-                      const isMenu = menuCard === item.id;
                       const vegCor = VEG_COR[item.tipoVegetacao] ?? '#94A3B8';
                       const rodCor = RODOVIA_COR[item.rodovia] ?? '#6366F1';
 
@@ -530,39 +566,21 @@ export default function KanbanScreen({ navigation }: Props) {
                           <View style={s.cardBody}>
                             <View style={s.cardTopRow}>
                               <Text style={s.cardNome} numberOfLines={2}>{item.nomeEquipe}</Text>
-                              <View style={{ position: 'relative' }}>
-                                <TouchableOpacity
-                                  style={s.cardMenuBtn}
-                                  onPress={() => setMenuCard(isMenu ? null : item.id)}
-                                  {...({ onMouseDown: (e: any) => e.stopPropagation() } as any)}
-                                >
-                                  <Ionicons name="ellipsis-horizontal" size={14} color="#94A3B8" />
-                                </TouchableOpacity>
-                                {isMenu && (
-                                  <View style={s.cardOptMenu}>
-                                    <TouchableOpacity style={s.colOptItem}
-                                      onPress={() => abrirDetalhe(item)}
-                                      {...({ onMouseDown: (e: any) => e.stopPropagation() } as any)}>
-                                      <Ionicons name="eye-outline" size={14} color="#334155" />
-                                      <Text style={s.colOptTxt}>Ver detalhes</Text>
-                                    </TouchableOpacity>
-                                    <View style={s.optDivider} />
-                                    <TouchableOpacity style={s.colOptItem}
-                                      onPress={() => abrirEditar(item)}
-                                      {...({ onMouseDown: (e: any) => e.stopPropagation() } as any)}>
-                                      <Ionicons name="create-outline" size={14} color="#334155" />
-                                      <Text style={s.colOptTxt}>Editar</Text>
-                                    </TouchableOpacity>
-                                    <View style={s.optDivider} />
-                                    <TouchableOpacity style={s.colOptItem}
-                                      onPress={() => excluir(item)}
-                                      {...({ onMouseDown: (e: any) => e.stopPropagation() } as any)}>
-                                      <Ionicons name="trash-outline" size={14} color={colors.error} />
-                                      <Text style={[s.colOptTxt, { color: colors.error }]}>Excluir</Text>
-                                    </TouchableOpacity>
-                                  </View>
-                                )}
-                              </View>
+                              <TouchableOpacity
+                                style={s.cardMenuBtn}
+                                {...({
+                                  onMouseDown: (e: any) => e.stopPropagation(),
+                                  onClick: (e: any) => {
+                                    e.stopPropagation();
+                                    if (menuCard === item.id) { setMenuCard(null); setMenuCardPos(null); return; }
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    setMenuCard(item.id);
+                                    setMenuCardPos({ x: rect.right - 158, y: rect.bottom + 6 });
+                                  },
+                                } as any)}
+                              >
+                                <Ionicons name="ellipsis-horizontal" size={14} color="#94A3B8" />
+                              </TouchableOpacity>
                             </View>
 
                             <Text style={s.cardKm}>{item.rodovia}  ·  KM {item.kmInicio}.0 → {item.kmFim}.0</Text>
@@ -619,6 +637,49 @@ export default function KanbanScreen({ navigation }: Props) {
           </ScrollView>
         </View>
       </View>
+
+      {/* ── MENU FLUTUANTE DO CARD (fora do ScrollView, position fixed) ──────── */}
+      {menuCard !== null && menuCardPos !== null && (() => {
+        const item = itens.find((i) => i.id === menuCard);
+        if (!item) return null;
+        return (
+          <View
+            key="card-float-menu"
+            {...({
+              style: {
+                position: 'fixed',
+                top: menuCardPos.y,
+                left: menuCardPos.x,
+                width: 158,
+                backgroundColor: '#fff',
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.18,
+                shadowRadius: 20,
+                zIndex: 99999,
+              },
+            } as any)}
+          >
+            <TouchableOpacity style={s.colOptItem} onPress={() => { setMenuCard(null); setMenuCardPos(null); abrirDetalhe(item); }}>
+              <Ionicons name="eye-outline" size={14} color="#334155" />
+              <Text style={s.colOptTxt}>Ver detalhes</Text>
+            </TouchableOpacity>
+            <View style={s.optDivider} />
+            <TouchableOpacity style={s.colOptItem} onPress={() => { setMenuCard(null); setMenuCardPos(null); abrirEditar(item); }}>
+              <Ionicons name="create-outline" size={14} color="#334155" />
+              <Text style={s.colOptTxt}>Editar</Text>
+            </TouchableOpacity>
+            <View style={s.optDivider} />
+            <TouchableOpacity style={s.colOptItem} onPress={() => { setMenuCard(null); setMenuCardPos(null); excluir(item); }}>
+              <Ionicons name="trash-outline" size={14} color={colors.error} />
+              <Text style={[s.colOptTxt, { color: colors.error }]}>Excluir</Text>
+            </TouchableOpacity>
+          </View>
+        );
+      })()}
 
       {/* ── NOTIF POPUP ──────────────────────────────────────────────────────── */}
       {showNotif && (
@@ -891,6 +952,85 @@ export default function KanbanScreen({ navigation }: Props) {
         </View>
       </Modal>
 
+      {/* ── MODAL ATUALIZAR ALTURA ──────────────────────────────────────────── */}
+      <Modal visible={modalAltura !== null} transparent animationType="fade">
+        <View style={s.overlay}>
+          {modalAltura && (() => {
+            const col = COLUNAS.find((c) => c.severidade === modalAltura.targetSev);
+            const sc  = sevCor(modalAltura.targetSev);
+            const sb  = sevBg(modalAltura.targetSev);
+            const faixas: Record<SeveridadeVegetacao, string> = {
+              sem_ocorrencia: '0 – 4 cm',
+              leve:   '5 – 14 cm',
+              grave:  '15 – 24 cm',
+              critico: '≥ 25 cm',
+            };
+            return (
+              <View style={s.alturaCard}>
+                {/* Ícone + título */}
+                <View style={[s.alturaIconBox, { backgroundColor: sb }]}>
+                  <Ionicons name="leaf" size={22} color={sc} />
+                </View>
+                <Text style={s.alturaTitulo}>Atualizar altura da vegetação</Text>
+                <Text style={s.alturaSubtitulo}>
+                  Card sendo movido para{' '}
+                  <Text style={{ color: sc, fontWeight: '700' }}>{col?.label ?? modalAltura.targetSev}</Text>
+                </Text>
+
+                {/* Faixa esperada */}
+                <View style={[s.alturaFaixaBox, { backgroundColor: sb, borderColor: sc + '44' }]}>
+                  <Ionicons name="information-circle-outline" size={14} color={sc} style={{ marginRight: 6 }} />
+                  <Text style={[s.alturaFaixaTxt, { color: sc }]}>
+                    Faixa esperada para esta coluna: <Text style={{ fontWeight: '700' }}>{faixas[modalAltura.targetSev]}</Text>
+                  </Text>
+                </View>
+
+                {/* Input */}
+                <Text style={s.alturaLabel}>Altura atual medida (cm)</Text>
+                <View style={[s.alturaInputRow, alturaErro ? { borderColor: '#EF4444' } : {}]}>
+                  <TextInput
+                    style={s.alturaInput}
+                    value={novaAltura}
+                    onChangeText={(v) => { setNovaAltura(v); setAlturaErro(null); }}
+                    keyboardType="decimal-pad"
+                    placeholder="0"
+                    placeholderTextColor="#CBD5E1"
+                    autoFocus
+                    selectTextOnFocus
+                  />
+                  <View style={s.alturaSufixo}>
+                    <Text style={s.alturaSufixoTxt}>cm</Text>
+                  </View>
+                </View>
+
+                {alturaErro ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF2F2', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, marginBottom: 10 }}>
+                    <Ionicons name="alert-circle-outline" size={13} color="#EF4444" style={{ marginRight: 5 }} />
+                    <Text style={{ fontSize: 12, color: '#EF4444', flex: 1, lineHeight: 16 }}>{alturaErro}</Text>
+                  </View>
+                ) : null}
+
+                {/* Nota: severidade será recalculada */}
+                <Text style={s.alturaNote}>
+                  A severidade será recalculada automaticamente com base na altura informada.
+                </Text>
+
+                {/* Botões */}
+                <View style={s.alturaBtns}>
+                  <TouchableOpacity style={[s.alturaBtnCancel, { marginRight: 10 }]} onPress={cancelarNovaAltura}>
+                    <Text style={s.alturaBtnCancelTxt}>Cancelar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[s.alturaBtnOk, { backgroundColor: sc }]} onPress={confirmarNovaAltura}>
+                    <Ionicons name="checkmark" size={14} color="#fff" style={{ marginRight: 4 }} />
+                    <Text style={s.alturaBtnOkTxt}>Confirmar</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })()}
+        </View>
+      </Modal>
+
       {/* ── MODAL EXCLUIR ───────────────────────────────────────────────────── */}
       <Modal visible={confirmarExcluir !== null} transparent animationType="fade">
         <View style={s.overlay}>
@@ -954,20 +1094,20 @@ const s = StyleSheet.create({
   kanbanArea: { flex: 1, flexDirection: 'column' },
 
   // Sub-header (title + filters)
-  subHeader:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingRight: 24 },
-  subHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  subHeader:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingRight: 24, zIndex: 999, overflow: 'visible' },
+  subHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 10, zIndex: 999, overflow: 'visible' },
   titulo:         { fontSize: 18, fontWeight: '700', color: '#fff' },
   subtitulo:      { fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 2 },
   btnCriar:       { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.primary, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 9, gap: 6 },
   btnCriarTxt:    { color: '#fff', fontWeight: '700', fontSize: 12 },
 
   // Dropdown
-  dropWrap:      { position: 'relative', zIndex: 40 },
-  dropdown:      { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7, minWidth: 130 },
+  dropWrap:      { position: 'relative', zIndex: 999 },
+  dropdown:      { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7, minWidth: 140 },
   dropdownOpen:  { backgroundColor: 'rgba(255,255,255,0.18)', borderColor: 'rgba(255,255,255,0.3)' },
   dropLbl:       { fontSize: 9, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 0.4 },
-  dropVal:       { fontSize: 13, color: '#fff', fontWeight: '600' },
-  dropMenu:      { position: 'absolute', top: 46, left: 0, right: 0, backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', zIndex: 100, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.15, shadowRadius: 14, elevation: 14 },
+  dropVal:       { fontSize: 13, color: '#fff', fontWeight: '600', flex: 1 },
+  dropMenu:      { position: 'absolute', top: 42, right: 0, minWidth: 160, backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', zIndex: 9999, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.15, shadowRadius: 14, elevation: 14 },
   dropItem:      { paddingHorizontal: 14, paddingVertical: 10 },
   dropItemOn:    { backgroundColor: '#EDE9FE' },
   dropItemTxt:   { fontSize: 13, color: colors.secondary },
@@ -985,13 +1125,12 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.09)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
-    overflow: 'hidden',
     maxHeight: 520,
     flexDirection: 'column',
   },
 
   // Column header
-  colHeader:   { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, backgroundColor: 'rgba(0,0,0,0.15)', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
+  colHeader:   { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, backgroundColor: 'rgba(0,0,0,0.15)', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)', borderTopLeftRadius: 14, borderTopRightRadius: 14, zIndex: 20 },
   colAccent:   { width: 10, height: 10, borderRadius: 5, marginRight: 8 },
   colTitle:    { flex: 1, fontSize: 12, fontWeight: '700', color: '#fff', letterSpacing: 0.2 },
   colCount:    { minWidth: 22, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 7, marginRight: 6 },
@@ -999,7 +1138,7 @@ const s = StyleSheet.create({
   colMenuBtn:  { width: 26, height: 26, alignItems: 'center', justifyContent: 'center', borderRadius: 6 },
 
   // Column options menu
-  colOptMenu: { position: 'absolute', top: 30, right: 0, width: 168, backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 16, elevation: 20, zIndex: 999 },
+  colOptMenu: { position: 'absolute', top: 30, right: 0, width: 168, backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 20, elevation: 50, zIndex: 9999 },
   colOptItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, gap: 8 },
   colOptTxt:  { fontSize: 13, color: '#334155', fontWeight: '500' },
   optDivider: { height: 1, backgroundColor: '#F1F5F9', marginHorizontal: 8 },
@@ -1029,7 +1168,7 @@ const s = StyleSheet.create({
   cardTopRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 },
   cardNome:     { flex: 1, fontSize: 13, fontWeight: '700', color: '#1E293B', lineHeight: 18, marginRight: 4 },
   cardMenuBtn:  { width: 24, height: 24, alignItems: 'center', justifyContent: 'center', borderRadius: 6 },
-  cardOptMenu:  { position: 'absolute', top: 26, right: 0, width: 155, backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 16, elevation: 20, zIndex: 999 },
+  cardOptMenu:  { position: 'absolute', top: 26, right: 0, width: 155, backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 20, elevation: 50, zIndex: 9999 },
   cardKm:       { fontSize: 11, color: '#64748B', fontWeight: '500', marginBottom: 3 },
   cardVeg:      { fontSize: 10, color: '#94A3B8', marginBottom: 8 },
   cardFooter:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
@@ -1070,6 +1209,25 @@ const s = StyleSheet.create({
 
   // Overlay
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+
+  // Modal atualizar altura (antes do smallCard para evitar quebra de inferência por gap)
+  alturaCard:        { backgroundColor: '#fff', borderRadius: 20, padding: 24, width: '100%', maxWidth: 380 },
+  alturaIconBox:     { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginBottom: 8 },
+  alturaTitulo:      { fontSize: 17, fontWeight: '700', color: '#1E293B', textAlign: 'center', marginBottom: 4 },
+  alturaSubtitulo:   { fontSize: 13, color: '#64748B', textAlign: 'center', marginBottom: 14 },
+  alturaFaixaBox:    { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 16 },
+  alturaFaixaTxt:    { fontSize: 12, flex: 1 },
+  alturaLabel:       { fontSize: 12, fontWeight: '600', color: '#475569', marginBottom: 6 },
+  alturaInputRow:    { flexDirection: 'row', alignItems: 'center', alignSelf: 'center', borderWidth: 2, borderColor: '#E2E8F0', borderRadius: 14, backgroundColor: '#F8FAFC', marginBottom: 12, overflow: 'hidden' },
+  alturaInput:       { width: 110, fontSize: 36, fontWeight: '800', color: '#1E293B', textAlign: 'center', paddingHorizontal: 16, paddingVertical: 14, outlineStyle: 'none' } as any,
+  alturaSufixo:      { paddingRight: 18, paddingLeft: 2, borderLeftWidth: 1.5, borderLeftColor: '#E2E8F0', paddingVertical: 14, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center', minWidth: 52 },
+  alturaSufixoTxt:   { fontSize: 15, fontWeight: '700', color: '#94A3B8' },
+  alturaNote:        { fontSize: 11, color: '#94A3B8', textAlign: 'center', marginBottom: 20, lineHeight: 16 },
+  alturaBtns:        { flexDirection: 'row' },
+  alturaBtnCancel:   { flex: 1, borderWidth: 1.5, borderColor: '#E2E8F0', borderRadius: 10, paddingVertical: 11, alignItems: 'center' },
+  alturaBtnCancelTxt:{ fontSize: 13, fontWeight: '600', color: '#64748B' },
+  alturaBtnOk:       { flex: 1, borderRadius: 10, paddingVertical: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  alturaBtnOkTxt:    { fontSize: 13, fontWeight: '700', color: '#fff' },
 
   // Small confirm card (logout/delete)
   smallCard:         { backgroundColor: '#fff', borderRadius: 20, padding: 28, width: '100%', maxWidth: 360, alignItems: 'center', gap: 12 },
