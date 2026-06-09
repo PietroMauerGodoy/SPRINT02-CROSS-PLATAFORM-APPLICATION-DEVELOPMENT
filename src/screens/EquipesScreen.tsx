@@ -19,6 +19,7 @@ import { colors } from '../theme';
 import { Equipe, RootStackParamList, StatusEquipe } from '../types';
 import { mockEquipes } from '../data/mockData';
 
+import NotificacoesBell from '../components/NotificacoesBell';
 import bgRoxo     from '../../assets/images/backgroundroxo.png';
 import logoNeg    from '../../assets/images/Motiva_Logo-Negativo.png';
 import perfilLogo from '../../assets/images/perfil_logo.png';
@@ -27,12 +28,6 @@ import perfilEq   from '../../assets/images/perfil_equipe.jpg';
 const ITENS_POR_PAGINA = 7;
 const RODOVIAS = ['Todas', 'BR-116', 'BR-381', 'SP-280'];
 
-const NOTIFICACOES = [
-  { id: 1, cor: '#F59E0B', titulo: 'Equipe inativa',      desc: 'Equipe #03 está inativa há mais de 3 dias sem justificativa.',   tempo: '5 min atrás' },
-  { id: 2, cor: '#3B82F6', titulo: 'Nova equipe criada',  desc: 'Equipe #11 foi cadastrada e está pronta para receber atribuições.', tempo: '1h atrás'   },
-  { id: 3, cor: '#F97316', titulo: 'Equipe em campo',     desc: 'Equipe #06 registrou entrada no trecho BR-116 Km 55.',           tempo: '2h atrás'    },
-  { id: 4, cor: '#8B5CF6', titulo: 'Relatório disponível',desc: 'O relatório semanal de operações foi gerado e está disponível.',  tempo: '1 dia atrás' },
-];
 const STATUS_OPTS: { label: string; value: StatusEquipe | 'todas' }[] = [
   { label: 'Todas',    value: 'todas'    },
   { label: 'Ativo',    value: 'ativo'    },
@@ -55,8 +50,6 @@ export default function EquipesScreen({ navigation }: Props) {
   const [modalCriar, setModalCriar]        = useState(false);
   const [equipeEditando, setEquipeEditando] = useState<Equipe | null>(null);
   const [sidebarAberta, setSidebarAberta]  = useState(true);
-  const [showNotif, setShowNotif]          = useState(false);
-  const [showAllNotif, setShowAllNotif]    = useState(false);
   const [showLogout, setShowLogout]        = useState(false);
   const [hoverSide, setHoverSide]          = useState<string | null>(null);
 
@@ -167,12 +160,9 @@ export default function EquipesScreen({ navigation }: Props) {
               <Ionicons name="sunny-outline" size={17} color="rgba(255,255,255,0.85)" />
             </TouchableOpacity>
             <View style={s.hPillDivider} />
-            <TouchableOpacity style={s.hPillBtn} onPress={() => setShowNotif((v) => !v)}>
-              <View>
-                <Ionicons name="notifications-outline" size={17} color={showNotif ? '#fff' : 'rgba(255,255,255,0.85)'} />
-                <View style={s.notifDot} />
-              </View>
-            </TouchableOpacity>
+            <View style={s.hPillBtn}>
+              <NotificacoesBell panelTop={54} panelRight={72} />
+            </View>
             <View style={s.hPillDivider} />
             <TouchableOpacity style={s.hPillBtn}>
               <Ionicons name="settings-outline" size={17} color="rgba(255,255,255,0.85)" />
@@ -256,7 +246,7 @@ export default function EquipesScreen({ navigation }: Props) {
               <View style={s.searchBox}>
                 <Ionicons name="search-outline" size={15} color="rgba(255,255,255,0.5)" />
                 <TextInput
-                  style={s.searchInput}
+                  style={[s.searchInput, { outlineStyle: 'none' } as any]}
                   placeholder="Buscar equipes..."
                   placeholderTextColor="rgba(255,255,255,0.35)"
                   value={busca}
@@ -432,7 +422,7 @@ export default function EquipesScreen({ navigation }: Props) {
             ].map((f) => (
               <View key={f.label} style={s.mField}>
                 <Text style={s.mLabel}>{f.label}</Text>
-                <TextInput style={s.mInput} placeholder={f.ph} placeholderTextColor={colors.gray400} value={f.val} onChangeText={f.set} />
+                <TextInput style={[s.mInput, { outlineStyle: 'none' } as any]} placeholder={f.ph} placeholderTextColor={colors.gray400} value={f.val} onChangeText={f.set} />
               </View>
             ))}
 
@@ -455,64 +445,6 @@ export default function EquipesScreen({ navigation }: Props) {
                 <Text style={s.mBtnSaveTxt}>{equipeEditando ? 'Salvar' : 'Criar Equipe'}</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ── POPUP NOTIFICAÇÕES ───────────────────────────────────────────── */}
-      {showNotif && (
-        <View style={s.notifPanel}>
-          <View style={s.notifHeader}>
-            <Text style={s.notifTitulo}>Notificações</Text>
-            <TouchableOpacity onPress={() => setShowNotif(false)}>
-              <Ionicons name="close" size={18} color="#94A3B8" />
-            </TouchableOpacity>
-          </View>
-          {NOTIFICACOES.map((n) => (
-            <View key={n.id} style={s.notifItem}>
-              <View style={[s.notifCircle, { backgroundColor: n.cor }]} />
-              <View style={s.notifTextoBox}>
-                <View style={s.notifTitleRow}>
-                  <Text style={s.notifTituloPill}>{n.titulo}</Text>
-                  <Text style={s.notifTempo}>{n.tempo}</Text>
-                </View>
-                <Text style={s.notifDesc} numberOfLines={2}>{n.desc}</Text>
-              </View>
-            </View>
-          ))}
-          <TouchableOpacity style={s.notifVerTodos} onPress={() => { setShowNotif(false); setShowAllNotif(true); }}>
-            <Text style={s.notifVerTodosTxt}>Ver todas as notificações</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* ── MODAL TODAS AS NOTIFICAÇÕES ──────────────────────────────────── */}
-      <Modal visible={showAllNotif} transparent animationType="fade">
-        <View style={s.overlay}>
-          <View style={s.allNotifCard}>
-            <View style={s.allNotifHeader}>
-              <Text style={s.allNotifTitulo}>Todas as Notificações</Text>
-              <TouchableOpacity onPress={() => setShowAllNotif(false)}>
-                <Ionicons name="close" size={20} color="#64748B" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {NOTIFICACOES.map((n) => (
-                <View key={n.id} style={s.allNotifItem}>
-                  <View style={[s.notifCircle, { backgroundColor: n.cor }]} />
-                  <View style={s.notifTextoBox}>
-                    <View style={s.notifTitleRow}>
-                      <Text style={s.notifTituloPill}>{n.titulo}</Text>
-                      <Text style={s.notifTempo}>{n.tempo}</Text>
-                    </View>
-                    <Text style={s.notifDesc}>{n.desc}</Text>
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
-            <TouchableOpacity style={s.allNotifFechar} onPress={() => setShowAllNotif(false)}>
-              <Text style={s.allNotifFecharTxt}>Fechar</Text>
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -576,6 +508,8 @@ const s = StyleSheet.create({
   // Conteúdo sem card branco (antes do primeiro gap para evitar bug de inferência TS)
   content: { flex: 1 },
   trowAlt: { backgroundColor: '#FAFBFF' },
+  notifVazia:    { alignItems: 'center', paddingVertical: 24 },
+  notifVaziaTxt: { fontSize: 12, color: '#94A3B8', marginTop: 6 },
 
   // Header — fundo transparente para mostrar o backgroundroxo
   header:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'transparent', paddingHorizontal: 22, paddingVertical: 10, zIndex: 10 },
@@ -604,10 +538,12 @@ const s = StyleSheet.create({
   // Notificações popup (Motiva white theme)
   notifDot:       { position: 'absolute', top: -2, right: -2, width: 7, height: 7, borderRadius: 4, backgroundColor: '#EF4444', borderWidth: 1, borderColor: '#fff' },
   notifPanel:     { position: 'absolute', top: 54, right: 72, width: 280, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#EDE9FE', shadowColor: '#5E22F3', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.1, shadowRadius: 16, elevation: 20, zIndex: 200 },
-  notifHeader:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  notifTitulo:    { fontSize: 13, fontWeight: '700', color: colors.secondary },
-  notifItem:      { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
-  notifCircle:    { width: 30, height: 30, borderRadius: 15, marginRight: 10, marginTop: 1 },
+  notifHeader:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  notifHeaderRight: { flexDirection: 'row', alignItems: 'center' },
+  notifCount:       { fontSize: 11, fontWeight: '700', color: '#fff', backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 6, paddingVertical: 1, marginRight: 8 },
+  notifTitulo:      { fontSize: 13, fontWeight: '700', color: colors.secondary },
+  notifItem:        { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
+  notifCircle:      { width: 30, height: 30, borderRadius: 15, marginRight: 10, marginTop: 1, alignItems: 'center', justifyContent: 'center' },
   notifTextoBox:  { flex: 1 },
   notifTitleRow:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 },
   notifTituloPill:{ fontSize: 12, fontWeight: '700', color: colors.secondary },
@@ -639,7 +575,7 @@ const s = StyleSheet.create({
   // Toolbar
   toolbarRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', zIndex: 30, marginBottom: 6 },
   searchBox:  { flex: 1, minWidth: 180, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 10, paddingHorizontal: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', height: 38, marginRight: 8 },
-  searchInput:{ flex: 1, fontSize: 12, color: '#fff', outlineStyle: 'none' } as any,
+  searchInput:{ flex: 1, fontSize: 12, color: '#fff' },
 
   dropWrap:     { position: 'relative', zIndex: 40, marginRight: 8 },
   dropdown:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 5, minWidth: 130, height: 38 },
@@ -709,7 +645,7 @@ const s = StyleSheet.create({
   modalTitulo:{ fontSize: 17, fontWeight: '700', color: colors.secondary },
   mField:    { gap: 5 },
   mLabel:    { fontSize: 11, fontWeight: '600', color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.3 },
-  mInput:    { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: colors.secondary, outlineStyle: 'none' } as any,
+  mInput:    { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: colors.secondary },
   chipRow:   { flexDirection: 'row', gap: 8 },
   chip:      { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: '#E2E8F0' },
   chipOn:    { backgroundColor: colors.primary, borderColor: colors.primary },

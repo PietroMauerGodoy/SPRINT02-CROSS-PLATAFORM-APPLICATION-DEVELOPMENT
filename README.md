@@ -55,6 +55,7 @@ Tabela paginada (7 itens/página) com:
 - Busca por nome, responsável ou ID
 - Filtros por rodovia (BR-116, BR-381, SP-280) e status
 - CRUD completo: criar, editar, excluir e alternar status (Ativo → Em Campo → Inativo)
+- Painel de notificações global acessível pelo sino no header
 
 ### 3. Kanban de Vegetação
 Quadro Kanban com quatro colunas baseadas na severidade da vegetação:
@@ -67,13 +68,39 @@ Quadro Kanban com quatro colunas baseadas na severidade da vegetação:
 | Crítico        | ≥ 25 cm         |
 
 Funcionalidades:
-- Arrastar e soltar cards entre colunas com validação automática de altura
-- Detalhe do card com upload de foto e registro de observações
+- Arrastar e soltar cards entre colunas com validação automática de faixa de altura
+- Modal de criação rápida com nome pré-preenchido ao usar o botão "+"
 - CRUD completo de registros de vegetação
-- Badge de predição de severidade por IA (simulado)
+- Cada ação (criar, editar, mover, excluir) gera uma notificação em tempo real
 
 ### 4. Ocorrências
-Lista, cadastro e detalhe de ocorrências de segurança viária (vazamentos, falta de EPI, iluminação, sinalização e manutenção), com filtros por risco e status.
+Fluxo completo em três telas:
+- **Lista**: resumo estatístico (total, abertas, em andamento, resolvidas), filtros por risco e status, lista de cards
+- **Cadastro**: modal com campos de título, local, categoria, responsável, descrição e seleção de nível de risco
+- **Detalhe**: exibe todos os dados da ocorrência com botão para avançar o status (Aberta → Em Andamento → Resolvida)
+
+---
+
+## Notificações globais
+
+O app possui um sistema de notificações compartilhado entre todas as telas, implementado via **React Context**:
+
+- O sino no header de qualquer tela abre um painel flutuante com as últimas notificações (scrollável)
+- "Ver todas" abre um modal com o histórico completo e opção de limpar
+- Ações no Kanban (mover card, criar, editar, excluir) geram notificações automaticamente
+- O contador de notificações não lidas aparece como badge vermelho no sino
+
+```typescript
+// Gerar uma notificação de qualquer tela:
+const { adicionarNotificacao } = useNotificacoes();
+
+adicionarNotificacao({
+  cor: '#8B5CF6',
+  icone: 'albums-outline',
+  titulo: 'Card movido no Kanban',
+  desc: '"Equipe Alfa" foi movido para a coluna Grave (18 cm).',
+});
+```
 
 ---
 
@@ -83,16 +110,17 @@ Lista, cadastro e detalhe de ocorrências de segurança viária (vazamentos, fal
 src/
 ├── screens/
 │   ├── LoginScreen.tsx          # Autenticação
-│   ├── OcorrenciasScreen.tsx    # Lista + Cadastro + Detalhe de ocorrências
 │   ├── EquipesScreen.tsx        # Gerenciamento de equipes
-│   └── KanbanScreen.tsx         # Kanban de vegetação
+│   ├── KanbanScreen.tsx         # Kanban de vegetação
+│   ├── OcorrenciasScreen.tsx    # Lista + Cadastro de ocorrências
+│   └── DetalheScreen.tsx        # Detalhe e avanço de status de ocorrência
 │
 ├── components/
-│   ├── OcorrenciaCard.tsx       # Card reutilizável de ocorrência
-│   ├── StatusBadge.tsx          # Badge de status da equipe
-│   ├── AppHeader.tsx            # Header reutilizável
-│   ├── MotivaLogo.tsx           # Componente do logotipo
-│   └── WaveBackground.tsx       # Background animado
+│   ├── NotificacoesBell.tsx     # Sino + painel flutuante + modal de notificações
+│   └── OcorrenciaCard.tsx       # Card reutilizável de ocorrência
+│
+├── context/
+│   └── NotificacoesContext.tsx  # Estado global de notificações (React Context)
 │
 ├── types/
 │   └── index.ts                 # Tipagem TypeScript centralizada
@@ -145,6 +173,15 @@ export type KanbanItem = {
   responsavel: string;
   observacao: string;
   ultimoServico: { data: string; responsavel: string } | null;
+};
+
+export type Notificacao = {
+  id: number;
+  cor: string;
+  icone: string;
+  titulo: string;
+  desc: string;
+  criadaEm: Date;
 };
 ```
 
@@ -200,7 +237,9 @@ Login
 
 ## Gerenciamento de estado
 
-O app usa `useState` do React para toda a gestão de dados dinâmicos. Exemplos:
+O app usa `useState` e **React Context** para gestão de dados dinâmicos.
+
+### Estado local (por tela)
 
 ```typescript
 // OcorrenciasScreen
@@ -213,17 +252,27 @@ const [itens, setItens] = useState<KanbanItem[]>(mockKanban);
 const [equipes, setEquipes] = useState<Equipe[]>(mockEquipes);
 ```
 
+### Estado global (React Context)
+
+```typescript
+// NotificacoesContext — disponível em todas as telas via hook
+const { notificacoes, adicionarNotificacao, limparTodas } = useNotificacoes();
+```
+
+O `NotificacoesProvider` envolve toda a aplicação em `App.tsx`, garantindo que notificações geradas no Kanban apareçam instantaneamente no sino de qualquer outra tela.
+
 Todas as operações de criar, editar e excluir atualizam o estado local e refletem imediatamente na interface.
 
 ---
 
 ## Tecnologias utilizadas
 
-| Tecnologia        | Versão | Uso                       |
-|-------------------|--------|---------------------------|
-| Expo SDK          | 56     | Plataforma base           |
-| React Native      | 0.79   | Framework UI              |
-| TypeScript        | 5.x    | Tipagem estática          |
-| React Navigation  | 7.x    | Navegação entre telas     |
-| Expo Vector Icons | —      | Ícones (Ionicons)         |
-| React Native Web  | —      | Suporte a navegador       |
+| Tecnologia        | Versão | Uso                                    |
+|-------------------|--------|----------------------------------------|
+| Expo SDK          | 56     | Plataforma base                        |
+| React Native      | 0.79   | Framework UI                           |
+| TypeScript        | 5.x    | Tipagem estática                       |
+| React Navigation  | 7.x    | Navegação entre telas (Stack)          |
+| React Context API | —      | Estado global de notificações          |
+| Expo Vector Icons | —      | Ícones (Ionicons, MaterialIcons)       |
+| React Native Web  | —      | Suporte a navegador                    |

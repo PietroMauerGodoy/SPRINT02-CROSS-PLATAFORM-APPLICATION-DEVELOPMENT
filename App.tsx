@@ -2,11 +2,14 @@ import React from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet } from 'react-native';
 import AppNavigator from './src/navigation/AppNavigator';
+import { NotificacoesProvider } from './src/context/NotificacoesContext';
 
 export default function App() {
   return (
     <GestureHandlerRootView style={styles.root}>
-      <AppNavigator />
+      <NotificacoesProvider>
+        <AppNavigator />
+      </NotificacoesProvider>
     </GestureHandlerRootView>
   );
 }

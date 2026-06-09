@@ -17,19 +17,14 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors } from '../theme';
 import { KanbanItem, RootStackParamList, SeveridadeVegetacao } from '../types';
 import { mockKanban } from '../data/mockData';
+import { useNotificacoes } from '../context/NotificacoesContext';
+import NotificacoesBell from '../components/NotificacoesBell';
 
 import bgRoxo     from '../../assets/images/backgroundroxo.png';
 import logoNeg    from '../../assets/images/Motiva_Logo-Negativo.png';
 import perfilLogo from '../../assets/images/perfil_logo.png';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-
-const NOTIFICACOES = [
-  { id: 1, cor: '#F59E0B', titulo: 'Equipe inativa',       desc: 'Equipe #03 está inativa há mais de 3 dias.',        tempo: '5 min atrás' },
-  { id: 2, cor: '#3B82F6', titulo: 'Nova equipe criada',   desc: 'Equipe #11 foi cadastrada com sucesso.',             tempo: '1h atrás'    },
-  { id: 3, cor: '#F97316', titulo: 'Equipe em campo',      desc: 'Equipe #06 registrou entrada no BR-116 Km 55.',     tempo: '2h atrás'    },
-  { id: 4, cor: '#8B5CF6', titulo: 'Relatório disponível', desc: 'O relatório semanal de operações está disponível.', tempo: '1 dia atrás' },
-];
 
 const COLUNAS: {
   id: string; label: string; cor: string; severidade: SeveridadeVegetacao | null;
@@ -105,8 +100,6 @@ export default function KanbanScreen({ navigation }: Props) {
 
   const [sidebarAberta, setSidebarAberta] = useState(true);
   const [hoverSide, setHoverSide]         = useState<string | null>(null);
-  const [showNotif, setShowNotif]         = useState(false);
-  const [showAllNotif, setShowAllNotif]   = useState(false);
   const [showLogout, setShowLogout]       = useState(false);
 
   const [menuCard, setMenuCard]           = useState<string | null>(null);
@@ -127,6 +120,7 @@ export default function KanbanScreen({ navigation }: Props) {
   const [alturaErro, setAlturaErro]           = useState<string | null>(null);
   const wasDragging                           = useRef(false);
   const ghostRef                              = useRef<any>(null);
+  const { adicionarNotificacao }              = useNotificacoes();
 
   // quick-add state per column
   const [quickAddCol, setQuickAddCol]     = useState<string | null>(null);
@@ -295,9 +289,16 @@ export default function KanbanScreen({ navigation }: Props) {
       return;
     }
     setAlturaErro(null);
+    const colLabel = COLUNAS.find((c) => c.severidade === modalAltura.targetSev)?.label ?? modalAltura.targetSev;
     setItens((prev) => prev.map((i) =>
       i.id === modalAltura.item.id ? { ...i, alturaAtual: cm, severidade: calcSeveridade(cm) } : i,
     ));
+    adicionarNotificacao({
+      cor:    '#8B5CF6',
+      icone:  'albums-outline',
+      titulo: 'Card movido no Kanban',
+      desc:   `"${modalAltura.item.nomeEquipe}" foi movido para a coluna ${colLabel} (${cm} cm).`,
+    });
     setModalAltura(null);
     setNovaAltura('');
   }
@@ -357,6 +358,11 @@ export default function KanbanScreen({ navigation }: Props) {
         tipoVegetacao: fVegetacao, alturaAtual: alt, severidade: sev,
         responsavel: fResponsavel.trim(), ultimoServico: ult,
       } : i));
+      adicionarNotificacao({
+        cor: '#3B82F6', icone: 'create-outline',
+        titulo: 'Card atualizado',
+        desc: `Dados de "${fEquipe.trim()}" foram atualizados no Kanban.`,
+      });
     } else {
       const id = `K${String(itens.length + 1).padStart(2, '0')}`;
       setItens((p) => [{ id, equipeId: '', nomeEquipe: fEquipe.trim(), rodovia: fRodovia,
@@ -364,12 +370,25 @@ export default function KanbanScreen({ navigation }: Props) {
         tipoVegetacao: fVegetacao, alturaAtual: alt, severidade: sev,
         responsavel: fResponsavel.trim(), observacao: '', ultimoServico: ult,
       }, ...p]);
+      adicionarNotificacao({
+        cor: '#10B981', icone: 'add-circle-outline',
+        titulo: 'Novo card criado',
+        desc: `"${fEquipe.trim()}" foi adicionado ao Kanban em ${fRodovia}.`,
+      });
     }
   }
 
   function excluir(item: KanbanItem) { setMenuCard(null); setCardDetalhe(null); setConfirmarExcluir(item); }
   function confirmarDelete() {
-    if (confirmarExcluir) { setItens((p) => p.filter((i) => i.id !== confirmarExcluir.id)); setConfirmarExcluir(null); }
+    if (confirmarExcluir) {
+      adicionarNotificacao({
+        cor: '#EF4444', icone: 'trash-outline',
+        titulo: 'Card excluído',
+        desc: `"${confirmarExcluir.nomeEquipe}" foi removido do Kanban.`,
+      });
+      setItens((p) => p.filter((i) => i.id !== confirmarExcluir.id));
+      setConfirmarExcluir(null);
+    }
   }
   function limparColuna(sev: SeveridadeVegetacao | null) {
     setMenuCol(null);
@@ -395,12 +414,9 @@ export default function KanbanScreen({ navigation }: Props) {
               <Ionicons name="sunny-outline" size={17} color="rgba(255,255,255,0.85)" />
             </TouchableOpacity>
             <View style={s.hPillDivider} />
-            <TouchableOpacity style={s.hPillBtn} onPress={() => setShowNotif((v) => !v)}>
-              <View>
-                <Ionicons name="notifications-outline" size={17} color={showNotif ? '#fff' : 'rgba(255,255,255,0.85)'} />
-                <View style={s.notifDot} />
-              </View>
-            </TouchableOpacity>
+            <View style={s.hPillBtn}>
+              <NotificacoesBell panelTop={54} panelRight={72} />
+            </View>
             <View style={s.hPillDivider} />
             <TouchableOpacity style={s.hPillBtn}>
               <Ionicons name="settings-outline" size={17} color="rgba(255,255,255,0.85)" />
@@ -680,65 +696,6 @@ export default function KanbanScreen({ navigation }: Props) {
           </View>
         );
       })()}
-
-      {/* ── NOTIF POPUP ──────────────────────────────────────────────────────── */}
-      {showNotif && (
-        <View style={s.notifPanel}>
-          <View style={s.notifHeader}>
-            <Text style={s.notifTitulo}>Notificações</Text>
-            <TouchableOpacity onPress={() => setShowNotif(false)}>
-              <Ionicons name="close" size={18} color="#94A3B8" />
-            </TouchableOpacity>
-          </View>
-          {NOTIFICACOES.map((n) => (
-            <View key={n.id} style={s.notifItem}>
-              <View style={[s.notifCircle, { backgroundColor: n.cor }]} />
-              <View style={s.notifTextoBox}>
-                <View style={s.notifTitleRow}>
-                  <Text style={s.notifTituloPill}>{n.titulo}</Text>
-                  <Text style={s.notifTempo}>{n.tempo}</Text>
-                </View>
-                <Text style={s.notifDesc} numberOfLines={2}>{n.desc}</Text>
-              </View>
-            </View>
-          ))}
-          <TouchableOpacity style={s.notifVerTodos}
-            onPress={() => { setShowNotif(false); setShowAllNotif(true); }}>
-            <Text style={s.notifVerTodosTxt}>Ver todas as notificações</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* ── MODAL TODAS NOTIFICAÇÕES ─────────────────────────────────────────── */}
-      <Modal visible={showAllNotif} transparent animationType="fade">
-        <View style={s.overlay}>
-          <View style={s.allNotifCard}>
-            <View style={s.allNotifHeader}>
-              <Text style={s.allNotifTitulo}>Todas as Notificações</Text>
-              <TouchableOpacity onPress={() => setShowAllNotif(false)}>
-                <Ionicons name="close" size={20} color="#64748B" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {NOTIFICACOES.map((n) => (
-                <View key={n.id} style={s.allNotifItem}>
-                  <View style={[s.notifCircle, { backgroundColor: n.cor }]} />
-                  <View style={s.notifTextoBox}>
-                    <View style={s.notifTitleRow}>
-                      <Text style={s.notifTituloPill}>{n.titulo}</Text>
-                      <Text style={s.notifTempo}>{n.tempo}</Text>
-                    </View>
-                    <Text style={s.notifDesc}>{n.desc}</Text>
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
-            <TouchableOpacity style={s.allNotifFechar} onPress={() => setShowAllNotif(false)}>
-              <Text style={s.allNotifFecharTxt}>Fechar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
 
       {/* ── MODAL LOGOUT ────────────────────────────────────────────────────── */}
       <Modal visible={showLogout} transparent animationType="fade">
