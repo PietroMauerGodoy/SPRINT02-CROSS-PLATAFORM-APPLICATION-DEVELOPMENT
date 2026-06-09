@@ -20,7 +20,6 @@ import { Equipe, RootStackParamList, StatusEquipe } from '../types';
 import { mockEquipes } from '../data/mockData';
 
 import bgRoxo     from '../../assets/images/backgroundroxo.png';
-import bgBranca   from '../../assets/images/backgroundbranca.png';
 import logoNeg    from '../../assets/images/Motiva_Logo-Negativo.png';
 import perfilLogo from '../../assets/images/perfil_logo.png';
 import perfilEq   from '../../assets/images/perfil_equipe.jpg';
@@ -231,11 +230,8 @@ export default function EquipesScreen({ navigation }: Props) {
           </View>
         )}
 
-        {/* Card branco principal */}
-        <View style={s.contentCard}>
-          {/* Background branco como imagem dentro do card */}
-          <ImageBackground source={bgBranca} style={StyleSheet.absoluteFill} resizeMode="cover" imageStyle={{ borderRadius: 20, opacity: 0.4 }} />
-
+        {/* Conteúdo principal — sem card branco */}
+        <View style={s.content}>
           <ScrollView
             style={s.scroll}
             contentContainerStyle={s.scrollContent}
@@ -250,24 +246,25 @@ export default function EquipesScreen({ navigation }: Props) {
                 </Text>
               </View>
               <TouchableOpacity style={s.btnCriar} onPress={abrirModalCriar}>
-                <Text style={s.btnCriarTxt}>+ Criar Novas Equipes</Text>
+                <Ionicons name="add" size={15} color="#fff" />
+                <Text style={s.btnCriarTxt}>Criar Novas Equipes</Text>
               </TouchableOpacity>
             </View>
 
             {/* Barra busca + filtros */}
             <View style={s.toolbarRow}>
               <View style={s.searchBox}>
-                <Ionicons name="search-outline" size={15} color={colors.gray400} />
+                <Ionicons name="search-outline" size={15} color="rgba(255,255,255,0.5)" />
                 <TextInput
                   style={s.searchInput}
                   placeholder="Buscar equipes..."
-                  placeholderTextColor={colors.gray400}
+                  placeholderTextColor="rgba(255,255,255,0.35)"
                   value={busca}
                   onChangeText={(t) => { setBusca(t); resetPagina(); }}
                 />
                 {busca.length > 0 && (
                   <TouchableOpacity onPress={() => { setBusca(''); resetPagina(); }}>
-                    <Ionicons name="close-circle" size={14} color={colors.gray400} />
+                    <Ionicons name="close-circle" size={14} color="rgba(255,255,255,0.5)" />
                   </TouchableOpacity>
                 )}
               </View>
@@ -282,7 +279,7 @@ export default function EquipesScreen({ navigation }: Props) {
                     <Text style={s.dropLbl}>Rodovias</Text>
                     <Text style={s.dropVal}>{rodoviaFiltro}</Text>
                   </View>
-                  <Ionicons name={dropRodovia ? 'chevron-up' : 'chevron-down'} size={12} color={colors.gray500} />
+                  <Ionicons name={dropRodovia ? 'chevron-up' : 'chevron-down'} size={12} color="rgba(255,255,255,0.6)" />
                 </TouchableOpacity>
                 {dropRodovia && (
                   <View style={s.dropMenu}>
@@ -306,7 +303,7 @@ export default function EquipesScreen({ navigation }: Props) {
                     <Text style={s.dropLbl}>Status</Text>
                     <Text style={s.dropVal}>{STATUS_OPTS.find((x) => x.value === statusFiltro)?.label}</Text>
                   </View>
-                  <Ionicons name={dropStatus ? 'chevron-up' : 'chevron-down'} size={12} color={colors.gray500} />
+                  <Ionicons name={dropStatus ? 'chevron-up' : 'chevron-down'} size={12} color="rgba(255,255,255,0.6)" />
                 </TouchableOpacity>
                 {dropStatus && (
                   <View style={s.dropMenu}>
@@ -335,12 +332,12 @@ export default function EquipesScreen({ navigation }: Props) {
             {/* Linhas */}
             {paginadas.length === 0 ? (
               <View style={s.emptyBox}>
-                <Ionicons name="search-outline" size={36} color={colors.gray300} />
+                <Ionicons name="search-outline" size={36} color="rgba(255,255,255,0.3)" />
                 <Text style={s.emptyTxt}>Nenhuma equipe encontrada</Text>
               </View>
             ) : (
-              paginadas.map((eq) => (
-                <TouchableOpacity key={eq.id} style={s.trow} onPress={() => navigation.navigate('Kanban')} activeOpacity={0.75}>
+              paginadas.map((eq, idx) => (
+                <TouchableOpacity key={eq.id} style={[s.trow, idx % 2 === 1 && s.trowAlt]} onPress={() => navigation.navigate('Kanban')} activeOpacity={0.8}>
                   <Text style={[s.tdId, s.cId]}>{eq.id}</Text>
 
                   <View style={[s.cEq, s.cellRow]}>
@@ -366,7 +363,7 @@ export default function EquipesScreen({ navigation }: Props) {
 
                   <View style={[s.cAc, s.cellRow]}>
                     <TouchableOpacity style={s.acBtnEdit} onPress={(e) => { e.stopPropagation?.(); abrirModalEditar(eq); }}>
-                      <Ionicons name="create-outline" size={14} color={colors.primary} />
+                      <Ionicons name="create-outline" size={13} color={colors.primary} />
                       <Text style={s.acBtnTxt}>Editar</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={s.acBtnStatus} onPress={(e) => { e.stopPropagation?.(); handleAlternarStatus(eq.id); }}>
@@ -387,7 +384,7 @@ export default function EquipesScreen({ navigation }: Props) {
                 onPress={() => setPagina((p) => Math.max(1, p - 1))}
                 disabled={paginaAtual === 1}
               >
-                <Ionicons name="chevron-back" size={14} color={paginaAtual === 1 ? colors.gray300 : colors.secondary} />
+                <Ionicons name="chevron-back" size={14} color={paginaAtual === 1 ? 'rgba(255,255,255,0.25)' : '#fff'} />
               </TouchableOpacity>
 
               {paginasBotoes().map((p, i) =>
@@ -409,7 +406,7 @@ export default function EquipesScreen({ navigation }: Props) {
                 onPress={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
                 disabled={paginaAtual === totalPaginas}
               >
-                <Ionicons name="chevron-forward" size={14} color={paginaAtual === totalPaginas ? colors.gray300 : colors.secondary} />
+                <Ionicons name="chevron-forward" size={14} color={paginaAtual === totalPaginas ? 'rgba(255,255,255,0.25)' : '#fff'} />
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -576,6 +573,10 @@ const s = StyleSheet.create({
   root:    { flex: 1, backgroundColor: '#3B0FA6' },
   bgFill:  { width: '100%', height: '100%' },
 
+  // Conteúdo sem card branco (antes do primeiro gap para evitar bug de inferência TS)
+  content: { flex: 1 },
+  trowAlt: { backgroundColor: '#FAFBFF' },
+
   // Header — fundo transparente para mostrar o backgroundroxo
   header:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'transparent', paddingHorizontal: 22, paddingVertical: 10, zIndex: 10 },
   hLeft:       { flexDirection: 'row', alignItems: 'center', gap: 18 },
@@ -623,62 +624,54 @@ const s = StyleSheet.create({
   allNotifFechar:  { paddingVertical: 14, alignItems: 'center', borderTopWidth: 1, borderTopColor: '#F1F5F9' },
   allNotifFecharTxt:{ fontSize: 13, color: '#64748B', fontWeight: '600' },
 
-  // Card branco
-  contentCard: {
-    flex: 1,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.97)',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 12,
-  },
+  // Conteúdo direto no fundo roxo
   scroll:        { flex: 1 },
-  scrollContent: { padding: 16, gap: 8, paddingBottom: 16 },
+  scrollContent: { paddingHorizontal: 4, paddingVertical: 8, paddingBottom: 20 },
 
   // Título
-  titleRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 },
+  titleRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: 16 },
   titleBlock: { flex: 1 },
-  titulo:     { fontSize: 18, fontWeight: '700', color: colors.secondary },
-  subtitulo:  { fontSize: 11, color: colors.gray400, marginTop: 2 },
-  btnCriar:   { backgroundColor: colors.primary, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 5 },
-  btnCriarTxt:{ color: colors.white, fontWeight: '700', fontSize: 12 },
+  titulo:     { fontSize: 20, fontWeight: '800', color: '#fff' },
+  subtitulo:  { fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 3 },
+  btnCriar:   { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
+  btnCriarTxt:{ color: '#fff', fontWeight: '700', fontSize: 12, marginLeft: 6 },
 
   // Toolbar
-  toolbarRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start', zIndex: 30 },
-  searchBox:  { flex: 1, minWidth: 180, flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 8, paddingHorizontal: 12, gap: 8, borderWidth: 1, borderColor: '#E2E8F0', height: 36 },
-  searchInput:{ flex: 1, fontSize: 12, color: colors.secondary, outlineStyle: 'none' } as any,
+  toolbarRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', zIndex: 30, marginBottom: 6 },
+  searchBox:  { flex: 1, minWidth: 180, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 10, paddingHorizontal: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', height: 38, marginRight: 8 },
+  searchInput:{ flex: 1, fontSize: 12, color: '#fff', outlineStyle: 'none' } as any,
 
-  dropWrap:    { position: 'relative', zIndex: 40 },
-  dropdown:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 4, gap: 10, minWidth: 120, height: 36 },
-  dropdownOpen:{ borderColor: colors.primary, backgroundColor: '#FAF5FF' },
-  dropLbl:     { fontSize: 9, color: colors.gray400, textTransform: 'uppercase', letterSpacing: 0.4 },
-  dropVal:     { fontSize: 13, color: colors.secondary, fontWeight: '600', marginTop: 1 },
-  dropMenu:    { position: 'absolute', top: 46, left: 0, right: 0, backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', zIndex: 100, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.12, shadowRadius: 12, elevation: 12 },
-  dropItem:    { paddingHorizontal: 14, paddingVertical: 10 },
-  dropItemOn:  { backgroundColor: '#EDE9FE' },
-  dropItemTxt: { fontSize: 13, color: colors.secondary },
+  dropWrap:     { position: 'relative', zIndex: 40, marginRight: 8 },
+  dropdown:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 5, minWidth: 130, height: 38 },
+  dropdownOpen: { backgroundColor: 'rgba(255,255,255,0.2)', borderColor: 'rgba(255,255,255,0.35)' },
+  dropLbl:      { fontSize: 9, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: 0.5 },
+  dropVal:      { fontSize: 13, color: '#fff', fontWeight: '600', marginTop: 1 },
+  dropMenu:     { position: 'absolute', top: 46, left: 0, right: 0, backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', zIndex: 100, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.18, shadowRadius: 14, elevation: 14 },
+  dropItem:     { paddingHorizontal: 14, paddingVertical: 10 },
+  dropItemOn:   { backgroundColor: '#EDE9FE' },
+  dropItemTxt:  { fontSize: 13, color: colors.secondary },
   dropItemTxtOn:{ color: colors.primary, fontWeight: '600' },
 
   // Cabeçalho tabela
-  thead:   { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  th:      { fontSize: 9, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.5 },
+  thead:   { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.12)', marginBottom: 4 },
+  th:      { fontSize: 9, fontWeight: '700', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 0.7 },
 
-  // Linhas como cards
+  // Linhas — cards brancos flutuantes
   trow: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 12, paddingVertical: 5,
-    marginVertical: 1,
+    paddingHorizontal: 14, paddingVertical: 7,
+    marginBottom: 5,
     backgroundColor: '#fff',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#EAEFF6',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 3,
   },
 
-  emptyBox: { alignItems: 'center', paddingVertical: 48, gap: 12 },
-  emptyTxt: { color: colors.gray400, fontSize: 14 },
+  emptyBox: { alignItems: 'center', paddingVertical: 56 },
+  emptyTxt: { color: 'rgba(255,255,255,0.4)', fontSize: 14, marginTop: 12 },
 
   // Colunas
   cId: { width: 52 },
@@ -689,25 +682,25 @@ const s = StyleSheet.create({
   cRs: { flex: 1.5 },
   cAc: { width: 140 },
 
-  tdId:    { fontSize: 11, fontWeight: '700', color: colors.primary },
-  tdTxt:   { fontSize: 11, color: '#334155', fontWeight: '500' },
-  tdSub:   { fontSize: 10, color: '#94A3B8' },
-  cellRow: { flexDirection: 'row', alignItems: 'center' },
-  avatarRow:{ width: 22, height: 22, borderRadius: 11, marginRight: 6 },
+  tdId:     { fontSize: 11, fontWeight: '700', color: colors.primary },
+  tdTxt:    { fontSize: 11, color: '#334155', fontWeight: '500' },
+  tdSub:    { fontSize: 10, color: '#94A3B8' },
+  cellRow:  { flexDirection: 'row', alignItems: 'center' },
+  avatarRow:{ width: 24, height: 24, borderRadius: 12, marginRight: 7 },
   acBtn:       { width: 24, height: 24, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
-  acBtnEdit:   { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: '#DDD6FE', backgroundColor: '#F5F3FF', marginRight: 4 },
+  acBtnEdit:   { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 7, borderWidth: 1, borderColor: '#DDD6FE', backgroundColor: '#F5F3FF', marginRight: 4 },
   acBtnTxt:    { fontSize: 11, color: colors.primary, fontWeight: '600', marginLeft: 3 },
-  acBtnStatus: { width: 28, height: 28, borderRadius: 6, borderWidth: 1, borderColor: '#BAE6FD', backgroundColor: '#F0F9FF', alignItems: 'center', justifyContent: 'center', marginRight: 4 },
-  acBtnDel:    { width: 28, height: 28, borderRadius: 6, borderWidth: 1, borderColor: '#FECACA', backgroundColor: '#FFF5F5', alignItems: 'center', justifyContent: 'center' },
+  acBtnStatus: { width: 28, height: 28, borderRadius: 7, borderWidth: 1, borderColor: '#BAE6FD', backgroundColor: '#F0F9FF', alignItems: 'center', justifyContent: 'center', marginRight: 4 },
+  acBtnDel:    { width: 28, height: 28, borderRadius: 7, borderWidth: 1, borderColor: '#FECACA', backgroundColor: '#FFF5F5', alignItems: 'center', justifyContent: 'center' },
 
   // Paginação
-  pagination:{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', marginTop: 8 },
-  pgBtn:  { width: 30, height: 30, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', marginLeft: 4 },
-  pgBtnOn:{ backgroundColor: colors.primary, borderColor: colors.primary },
-  pgBtnOff:{ opacity: 0.35 },
-  pgTxt:  { fontSize: 12, color: colors.secondary, fontWeight: '500' },
-  pgTxtOn:{ color: '#fff', fontWeight: '700' },
-  pgDots: { fontSize: 13, color: '#94A3B8', paddingHorizontal: 2 },
+  pagination: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', marginTop: 10 },
+  pgBtn:   { width: 32, height: 32, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center', marginLeft: 5 },
+  pgBtnOn: { backgroundColor: '#fff', borderColor: '#fff' },
+  pgBtnOff:{ opacity: 0.3 },
+  pgTxt:   { fontSize: 12, color: 'rgba(255,255,255,0.8)', fontWeight: '500' },
+  pgTxtOn: { color: colors.primary, fontWeight: '700' },
+  pgDots:  { fontSize: 13, color: 'rgba(255,255,255,0.35)', paddingHorizontal: 3 },
 
   // Modal
   overlay:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 },
