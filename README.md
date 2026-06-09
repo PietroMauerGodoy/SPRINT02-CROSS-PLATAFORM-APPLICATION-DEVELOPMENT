@@ -139,7 +139,7 @@ src/
 
 ## Modelagem TypeScript
 
-Todos os tipos estão centralizados em `src/types/index.ts`:
+Os tipos principais estão em `src/types/index.ts`:
 
 ```typescript
 export type RiscoNivel = 'baixo' | 'medio' | 'alto';
@@ -153,7 +153,7 @@ export type Ocorrencia = {
   data: string;
   categoria: string;
   status: 'aberta' | 'em_andamento' | 'resolvida';
-  responsavel: string;
+  responsavel?: string;
 };
 
 export type StatusEquipe = 'ativo' | 'inativo' | 'em_campo';
@@ -174,7 +174,11 @@ export type KanbanItem = {
   observacao: string;
   ultimoServico: { data: string; responsavel: string } | null;
 };
+```
 
+O tipo `Notificacao` é definido em `src/context/NotificacoesContext.tsx`:
+
+```typescript
 export type Notificacao = {
   id: number;
   cor: string;
