@@ -39,7 +39,7 @@ npx expo start
 | Usuário | Senha    | Cargo         |
 |---------|----------|---------------|
 | `admin` | `123456` | Administrador |
-| `joao`  | `123456` | Eng. de Campo |
+
 
 ---
 
