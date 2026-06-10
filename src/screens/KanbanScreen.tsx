@@ -16,8 +16,9 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors } from '../theme';
 import { KanbanItem, RootStackParamList, SeveridadeVegetacao } from '../types';
-import { mockKanban } from '../data/mockData';
 import { useNotificacoes } from '../context/NotificacoesContext';
+import { useKanban } from '../context/KanbanContext';
+import { useEquipes } from '../context/EquipesContext';
 import NotificacoesBell from '../components/NotificacoesBell';
 
 import bgRoxo     from '../../assets/images/backgroundroxo.png';
@@ -94,7 +95,8 @@ function getIA(item: KanbanItem): { texto: string; cor: string } {
 type Props = { navigation: NativeStackNavigationProp<RootStackParamList, 'Kanban'> };
 
 export default function KanbanScreen({ navigation }: Props) {
-  const [itens, setItens]             = useState<KanbanItem[]>(mockKanban);
+  const { itens, adicionarItem, atualizarItem, removerItem, limparColuna: limparColunaCtx } = useKanban();
+  const { setStatusEquipe } = useEquipes();
   const [rodoviaFiltro, setRodoviaFiltro] = useState('Todas');
   const [dropRodovia, setDropRodovia] = useState(false);
 
@@ -120,6 +122,7 @@ export default function KanbanScreen({ navigation }: Props) {
   const [alturaErro, setAlturaErro]           = useState<string | null>(null);
   const wasDragging                           = useRef(false);
   const ghostRef                              = useRef<any>(null);
+  const colRefs                               = useRef<Record<string, any>>({});
   const { adicionarNotificacao }              = useNotificacoes();
 
   // quick-add state per column
@@ -165,7 +168,7 @@ export default function KanbanScreen({ navigation }: Props) {
   }
 
   // ── Drag & Drop ──────────────────────────────────────────────────────────
-  // Threshold: move < 6px = click (abre detalhe), move ≥ 6px = arrasta card
+  // Threshold: move < 6px = click, move ≥ 6px = arrasta card
   function handleCardPointerDown(e: any, item: KanbanItem) {
     if (e.button !== 0) return;
     e.stopPropagation();
@@ -175,11 +178,26 @@ export default function KanbanScreen({ navigation }: Props) {
     let dragActive = false;
     let rafId: number | null = null;
 
-    // Coleta rects das colunas uma vez só (antes de qualquer render)
+    // Coleta rects dos refs React (confiável em RN Web)
     const cols = COLUNAS.map((col) => {
-      const el = (document as any).getElementById(`kancol-${col.id}`);
-      return { col, rect: el ? (el.getBoundingClientRect() as DOMRect) : null };
+      const node = colRefs.current[col.id];
+      const rect: DOMRect | null = node?.getBoundingClientRect?.() ?? null;
+      return { col, rect };
     });
+
+    function getColRects() {
+      return COLUNAS.map((col) => {
+        const node = colRefs.current[col.id];
+        const rect: DOMRect | null = node?.getBoundingClientRect?.() ?? null;
+        return { col, rect };
+      });
+    }
+
+    function hitCol(x: number, y: number, rects = cols) {
+      return rects.find(({ rect }) =>
+        rect && x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+      ) ?? null;
+    }
 
     function createGhost() {
       const sc = sevCor(item.severidade);
@@ -223,11 +241,7 @@ export default function KanbanScreen({ navigation }: Props) {
             ghostRef.current.style.transform =
               `translate(${cx - 132}px,${cy - 44}px) rotate(2deg) scale(1.04)`;
           }
-          const over = cols.find(({ rect }) =>
-            rect && cx >= rect.left && cx <= rect.right &&
-                    cy >= rect.top  && cy <= rect.bottom,
-          );
-          setDragOverCol(over?.col.id ?? null);
+          setDragOverCol(hitCol(cx, cy)?.col.id ?? null);
         });
       }
     }
@@ -242,13 +256,9 @@ export default function KanbanScreen({ navigation }: Props) {
           (document as any).body.removeChild(ghostRef.current);
           ghostRef.current = null;
         }
-        const over = cols.find(({ rect }) =>
-          rect && ue.clientX >= rect.left && ue.clientX <= rect.right &&
-                  ue.clientY >= rect.top  && ue.clientY <= rect.bottom,
-        );
+        const over = hitCol(ue.clientX, ue.clientY, getColRects());
         if (over) {
           const targetSev: SeveridadeVegetacao = over.col.severidade ?? 'sem_ocorrencia';
-          // Abre modal para confirmar a nova altura antes de mover o card
           setNovaAltura(String(item.alturaAtual));
           setModalAltura({ item, targetSev });
         }
@@ -256,7 +266,6 @@ export default function KanbanScreen({ navigation }: Props) {
         setDragOverCol(null);
         setTimeout(() => { wasDragging.current = false; }, 80);
       } else {
-        // Movimento < 6px → era um clique, abre o detalhe
         setMenuCard(null);
         abrirDetalhe(item);
       }
@@ -278,26 +287,26 @@ export default function KanbanScreen({ navigation }: Props) {
     if (!modalAltura) return;
     const cm = parseFloat(novaAltura.replace(',', '.'));
     if (isNaN(cm) || cm < 0) {
-      setAlturaErro('Digite um valor numérico válido.');
+      setAlturaErro('Digite um valor numérico válido (ex: 12).');
       return;
     }
     const faixa = FAIXA_RANGES[modalAltura.targetSev];
     if (cm < faixa.min || cm > faixa.max) {
-      setAlturaErro(
-        `Para a coluna "${sevLabel(modalAltura.targetSev)}" a altura deve estar entre ${faixa.label}. Você digitou ${cm} cm.`
-      );
+      setAlturaErro(`Altura fora da faixa. Para esta coluna, insira entre ${faixa.label}.`);
       return;
     }
     setAlturaErro(null);
-    const colLabel = COLUNAS.find((c) => c.severidade === modalAltura.targetSev)?.label ?? modalAltura.targetSev;
-    setItens((prev) => prev.map((i) =>
-      i.id === modalAltura.item.id ? { ...i, alturaAtual: cm, severidade: calcSeveridade(cm) } : i,
-    ));
+    const novaSev = calcSeveridade(cm);
+    const colLabel = COLUNAS.find((c) => c.severidade === novaSev || (c.severidade === null && novaSev === 'sem_ocorrencia'))?.label ?? novaSev;
+    atualizarItem(modalAltura.item.id, { alturaAtual: cm, severidade: novaSev });
+    if (modalAltura.item.equipeId) {
+      setStatusEquipe(modalAltura.item.equipeId, novaSev === 'sem_ocorrencia' ? 'ativo' : 'em_campo');
+    }
     adicionarNotificacao({
       cor:    '#8B5CF6',
       icone:  'albums-outline',
       titulo: 'Card movido no Kanban',
-      desc:   `"${modalAltura.item.nomeEquipe}" foi movido para a coluna ${colLabel} (${cm} cm).`,
+      desc:   `"${modalAltura.item.nomeEquipe}" foi movido para "${colLabel}" (${cm} cm).`,
     });
     setModalAltura(null);
     setNovaAltura('');
@@ -308,7 +317,7 @@ export default function KanbanScreen({ navigation }: Props) {
   function abrirDetalhe(item: KanbanItem) { setMenuCard(null); setCardDetalhe(item); setDetObs(item.observacao); }
   function salvarObs() {
     if (!cardDetalhe) return;
-    setItens((p) => p.map((i) => i.id === cardDetalhe.id ? { ...i, observacao: detObs } : i));
+    atualizarItem(cardDetalhe.id, { observacao: detObs });
     setCardDetalhe((c) => c ? { ...c, observacao: detObs } : null);
     setSavedId(cardDetalhe.id);
     setTimeout(() => setSavedId(null), 2000);
@@ -331,7 +340,7 @@ export default function KanbanScreen({ navigation }: Props) {
     setModalCriar(true);
   }
 
-  function handleQuickAdd(sev: SeveridadeVegetacao | null) {
+  function handleQuickAdd(_sev: SeveridadeVegetacao | null) {
     const nome = quickNome.trim();
     setQuickNome(''); setQuickAddCol(null);
     // Abre o modal de criação com o nome já preenchido
@@ -352,24 +361,24 @@ export default function KanbanScreen({ navigation }: Props) {
     const ult = fData.trim() ? { data: fData.trim(), responsavel: fUltResp.trim() } : null;
     setModalCriar(false);
     if (itemEditando) {
-      setItens((p) => p.map((i) => i.id === itemEditando.id ? {
-        ...i, nomeEquipe: fEquipe.trim(), rodovia: fRodovia,
+      atualizarItem(itemEditando.id, {
+        nomeEquipe: fEquipe.trim(), rodovia: fRodovia,
         kmInicio: parseFloat(fKmInicio) || 0, kmFim: parseFloat(fKmFim) || 0,
         tipoVegetacao: fVegetacao, alturaAtual: alt, severidade: sev,
         responsavel: fResponsavel.trim(), ultimoServico: ult,
-      } : i));
+      });
       adicionarNotificacao({
         cor: '#3B82F6', icone: 'create-outline',
         titulo: 'Card atualizado',
         desc: `Dados de "${fEquipe.trim()}" foram atualizados no Kanban.`,
       });
     } else {
-      const id = `K${String(itens.length + 1).padStart(2, '0')}`;
-      setItens((p) => [{ id, equipeId: '', nomeEquipe: fEquipe.trim(), rodovia: fRodovia,
+      adicionarItem({
+        equipeId: '', nomeEquipe: fEquipe.trim(), rodovia: fRodovia,
         kmInicio: parseFloat(fKmInicio) || 0, kmFim: parseFloat(fKmFim) || 0,
         tipoVegetacao: fVegetacao, alturaAtual: alt, severidade: sev,
         responsavel: fResponsavel.trim(), observacao: '', ultimoServico: ult,
-      }, ...p]);
+      });
       adicionarNotificacao({
         cor: '#10B981', icone: 'add-circle-outline',
         titulo: 'Novo card criado',
@@ -386,13 +395,13 @@ export default function KanbanScreen({ navigation }: Props) {
         titulo: 'Card excluído',
         desc: `"${confirmarExcluir.nomeEquipe}" foi removido do Kanban.`,
       });
-      setItens((p) => p.filter((i) => i.id !== confirmarExcluir.id));
+      removerItem(confirmarExcluir.id);
       setConfirmarExcluir(null);
     }
   }
   function limparColuna(sev: SeveridadeVegetacao | null) {
     setMenuCol(null);
-    if (sev !== null) setItens((p) => p.filter((i) => i.severidade !== sev));
+    if (sev !== null) limparColunaCtx(sev);
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -510,8 +519,8 @@ export default function KanbanScreen({ navigation }: Props) {
               return (
                 <View
                   key={col.id}
+                  ref={(el: any) => { colRefs.current[col.id] = el; }}
                   style={[s.column, isDragOver && { borderColor: col.cor, borderWidth: 2 }]}
-                  {...({ id: `kancol-${col.id}` } as any)}
                 >
                   {/* Column header */}
                   <View style={s.colHeader}>
@@ -913,15 +922,10 @@ export default function KanbanScreen({ navigation }: Props) {
       <Modal visible={modalAltura !== null} transparent animationType="fade">
         <View style={s.overlay}>
           {modalAltura && (() => {
-            const col = COLUNAS.find((c) => c.severidade === modalAltura.targetSev);
-            const sc  = sevCor(modalAltura.targetSev);
-            const sb  = sevBg(modalAltura.targetSev);
-            const faixas: Record<SeveridadeVegetacao, string> = {
-              sem_ocorrencia: '0 – 4 cm',
-              leve:   '5 – 14 cm',
-              grave:  '15 – 24 cm',
-              critico: '≥ 25 cm',
-            };
+            const col   = COLUNAS.find((c) => c.severidade === modalAltura.targetSev);
+            const sc    = sevCor(modalAltura.targetSev);
+            const sb    = sevBg(modalAltura.targetSev);
+            const faixa = FAIXA_RANGES[modalAltura.targetSev];
             return (
               <View style={s.alturaCard}>
                 {/* Ícone + título */}
@@ -930,15 +934,15 @@ export default function KanbanScreen({ navigation }: Props) {
                 </View>
                 <Text style={s.alturaTitulo}>Atualizar altura da vegetação</Text>
                 <Text style={s.alturaSubtitulo}>
-                  Card sendo movido para{' '}
+                  Movendo para{' '}
                   <Text style={{ color: sc, fontWeight: '700' }}>{col?.label ?? modalAltura.targetSev}</Text>
                 </Text>
 
-                {/* Faixa esperada */}
+                {/* Faixa esperada para a coluna */}
                 <View style={[s.alturaFaixaBox, { backgroundColor: sb, borderColor: sc + '44' }]}>
                   <Ionicons name="information-circle-outline" size={14} color={sc} style={{ marginRight: 6 }} />
                   <Text style={[s.alturaFaixaTxt, { color: sc }]}>
-                    Faixa esperada para esta coluna: <Text style={{ fontWeight: '700' }}>{faixas[modalAltura.targetSev]}</Text>
+                    Faixa válida para esta coluna: <Text style={{ fontWeight: '700' }}>{faixa.label}</Text>
                   </Text>
                 </View>
 
