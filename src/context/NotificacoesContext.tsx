@@ -10,9 +10,11 @@ export type Notificacao = {
 };
 
 type NotificacoesContextType = {
-  notificacoes: Notificacao[];
-  adicionarNotificacao: (n: Omit<Notificacao, 'id' | 'criadaEm'>) => void;
-  limparTodas: () => void;
+  notificacoes:        Notificacao[];
+  naoLidas:            number;
+  adicionarNotificacao:(n: Omit<Notificacao, 'id' | 'criadaEm'>) => void;
+  marcarTodasLidas:    () => void;
+  limparTodas:         () => void;
 };
 
 const NotificacoesContext = createContext<NotificacoesContextType | null>(null);
@@ -46,27 +48,34 @@ const INICIAIS: Notificacao[] = [
 
 export function tempoRelativo(data: Date): string {
   const diff = Math.floor((Date.now() - data.getTime()) / 1000);
-  if (diff < 60)               return 'agora mesmo';
-  if (diff < 3600)             return `${Math.floor(diff / 60)} min atrás`;
-  if (diff < 86400)            return `${Math.floor(diff / 3600)}h atrás`;
+  if (diff < 60)   return 'agora mesmo';
+  if (diff < 3600) return `${Math.floor(diff / 60)} min atrás`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h atrás`;
   return `${Math.floor(diff / 86400)} dia${Math.floor(diff / 86400) > 1 ? 's' : ''} atrás`;
 }
 
 export function NotificacoesProvider({ children }: { children: ReactNode }) {
   const [notificacoes, setNotificacoes] = useState<Notificacao[]>(INICIAIS);
+  const [naoLidas, setNaoLidas]         = useState(0);
   let nextId = notificacoes.length + 1;
 
   function adicionarNotificacao(n: Omit<Notificacao, 'id' | 'criadaEm'>) {
     const nova: Notificacao = { ...n, id: nextId++, criadaEm: new Date() };
     setNotificacoes((prev) => [nova, ...prev]);
+    setNaoLidas((prev) => prev + 1);
+  }
+
+  function marcarTodasLidas() {
+    setNaoLidas(0);
   }
 
   function limparTodas() {
     setNotificacoes([]);
+    setNaoLidas(0);
   }
 
   return (
-    <NotificacoesContext.Provider value={{ notificacoes, adicionarNotificacao, limparTodas }}>
+    <NotificacoesContext.Provider value={{ notificacoes, naoLidas, adicionarNotificacao, marcarTodasLidas, limparTodas }}>
       {children}
     </NotificacoesContext.Provider>
   );

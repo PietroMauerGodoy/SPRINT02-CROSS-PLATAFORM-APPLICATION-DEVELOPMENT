@@ -5,8 +5,8 @@ import { useNotificacoes, tempoRelativo } from '../context/NotificacoesContext';
 import { colors } from '../theme';
 
 type Props = {
-  iconColor?: string;
-  panelTop?:  number;
+  iconColor?:  string;
+  panelTop?:   number;
   panelRight?: number;
 };
 
@@ -15,40 +15,49 @@ export default function NotificacoesBell({
   panelTop   = 54,
   panelRight = 16,
 }: Props) {
-  const { notificacoes, limparTodas } = useNotificacoes();
+  const { notificacoes, naoLidas, marcarTodasLidas, limparTodas } = useNotificacoes();
   const [showPanel, setShowPanel] = useState(false);
   const [showModal, setShowModal] = useState(false);
 
-  // No web, position:'fixed' ignora overflow:hidden dos pais (hIconPill)
   const panelPosition = Platform.OS === 'web'
     ? ({ position: 'fixed', top: panelTop, right: panelRight } as any)
     : { position: 'absolute', top: panelTop, right: panelRight };
 
+  function abrirPainel() {
+    setShowPanel((v) => !v);
+    if (!showPanel) marcarTodasLidas();   // ao abrir, zera não-lidas
+  }
+
+  function abrirModal() {
+    setShowPanel(false);
+    setShowModal(true);
+    marcarTodasLidas();
+  }
+
   return (
     <>
-      {/* Botão sino */}
-      <TouchableOpacity onPress={() => setShowPanel((v) => !v)} style={s.bellWrap}>
+      {/* ── Botão sino ─────────────────────────────────────────────────────── */}
+      <TouchableOpacity onPress={abrirPainel} style={s.bellWrap}>
         <Ionicons
           name="notifications-outline"
           size={17}
           color={showPanel ? '#fff' : iconColor}
         />
-        {notificacoes.length > 0 && <View style={s.dot} />}
+        {naoLidas > 0 && (
+          <View style={s.badge}>
+            <Text style={s.badgeTxt}>{naoLidas > 99 ? '99+' : naoLidas}</Text>
+          </View>
+        )}
       </TouchableOpacity>
 
-      {/* Painel flutuante — usa fixed no web para escapar do overflow:hidden */}
+      {/* ── Painel flutuante ───────────────────────────────────────────────── */}
       {showPanel && (
         <View style={[s.panel, panelPosition]}>
           <View style={s.panelHeader}>
             <Text style={s.panelTitulo}>Notificações</Text>
-            <View style={s.panelHeaderRight}>
-              {notificacoes.length > 0 && (
-                <Text style={s.badge}>{notificacoes.length}</Text>
-              )}
-              <TouchableOpacity onPress={() => setShowPanel(false)}>
-                <Ionicons name="close" size={18} color="#94A3B8" />
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity onPress={() => setShowPanel(false)}>
+              <Ionicons name="close" size={18} color="#94A3B8" />
+            </TouchableOpacity>
           </View>
 
           <ScrollView style={s.panelScroll} showsVerticalScrollIndicator={false}>
@@ -75,16 +84,13 @@ export default function NotificacoesBell({
             )}
           </ScrollView>
 
-          <TouchableOpacity
-            style={s.verTodos}
-            onPress={() => { setShowPanel(false); setShowModal(true); }}
-          >
+          <TouchableOpacity style={s.verTodos} onPress={abrirModal}>
             <Text style={s.verTodosTxt}>Ver todas as notificações</Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {/* Modal — todas as notificações */}
+      {/* ── Modal todas ────────────────────────────────────────────────────── */}
       <Modal visible={showModal} transparent animationType="fade">
         <View style={s.overlay}>
           <View style={s.modalCard}>
@@ -139,13 +145,14 @@ export default function NotificacoesBell({
 
 const s = StyleSheet.create({
   bellWrap: { position: 'relative' },
-  dot:      { position: 'absolute', top: -2, right: -2, width: 7, height: 7, borderRadius: 4, backgroundColor: '#EF4444', borderWidth: 1, borderColor: '#fff' },
+
+  // Badge vermelho de não-lidas
+  badge:    { position: 'absolute', top: -6, right: -8, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: '#EF4444', borderWidth: 1.5, borderColor: '#fff', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
+  badgeTxt: { fontSize: 9, fontWeight: '800', color: '#fff', lineHeight: 12 },
 
   panel:           { width: 300, backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#EDE9FE', shadowColor: '#5E22F3', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.12, shadowRadius: 18, elevation: 22, zIndex: 9999 },
   panelHeader:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  panelHeaderRight:{ flexDirection: 'row', alignItems: 'center' },
   panelTitulo:     { fontSize: 13, fontWeight: '700', color: colors.secondary },
-  badge:           { fontSize: 11, fontWeight: '700', color: '#fff', backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 6, paddingVertical: 1, marginRight: 8 },
   panelScroll:     { maxHeight: 280 },
 
   item:     { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },

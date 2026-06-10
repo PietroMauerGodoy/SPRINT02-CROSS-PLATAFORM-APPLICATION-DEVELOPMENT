@@ -20,6 +20,7 @@ import { Equipe, RootStackParamList, StatusEquipe } from '../types';
 import { mockEquipes } from '../data/mockData';
 
 import NotificacoesBell from '../components/NotificacoesBell';
+import { useNotificacoes } from '../context/NotificacoesContext';
 import bgRoxo     from '../../assets/images/backgroundroxo.png';
 import logoNeg    from '../../assets/images/Motiva_Logo-Negativo.png';
 import perfilLogo from '../../assets/images/perfil_logo.png';
@@ -51,6 +52,7 @@ export default function EquipesScreen({ navigation }: Props) {
   const [equipeEditando, setEquipeEditando] = useState<Equipe | null>(null);
   const [sidebarAberta, setSidebarAberta]  = useState(true);
   const [showLogout, setShowLogout]        = useState(false);
+  const { adicionarNotificacao } = useNotificacoes();
   const [hoverSide, setHoverSide]          = useState<string | null>(null);
 
   function handleLogout() { setShowLogout(true); }
@@ -100,11 +102,21 @@ export default function EquipesScreen({ navigation }: Props) {
       setEquipes((p) => p.map((e) => e.id === equipeEditando.id
         ? { ...e, nome: novoNome.trim(), rodovia: novoRodovia, km: `Km ${novoKm.trim()}`, trechoRodovia: novoTrecho.trim(), responsavel: novoResp.trim() }
         : e));
+      adicionarNotificacao({
+        cor: '#3B82F6', icone: 'create-outline',
+        titulo: 'Equipe editada',
+        desc: `${novoNome.trim()} (${equipeEditando.id}) foi atualizada por ${novoResp.trim()}.`,
+      });
     } else {
       const id = `#${String(equipes.length + 1).padStart(2, '0')}`;
       const nova: Equipe = { id, nome: novoNome.trim(), status: 'ativo', rodovia: novoRodovia, km: `Km ${novoKm.trim()}`, trechoRodovia: novoTrecho.trim(), responsavel: novoResp.trim() };
       setEquipes((p) => [nova, ...p]);
       setPagina(1);
+      adicionarNotificacao({
+        cor: '#10B981', icone: 'people-outline',
+        titulo: 'Nova equipe criada',
+        desc: `${nova.nome} (${nova.id}) foi cadastrada em ${nova.rodovia} — ${nova.trechoRodovia}.`,
+      });
     }
   }
 
@@ -114,14 +126,31 @@ export default function EquipesScreen({ navigation }: Props) {
 
   function confirmarDelete() {
     if (confirmarExcluir) {
+      adicionarNotificacao({
+        cor: '#EF4444', icone: 'trash-outline',
+        titulo: 'Equipe removida',
+        desc: `${confirmarExcluir.nome} (${confirmarExcluir.id}) foi excluída do sistema.`,
+      });
       setEquipes((p) => p.filter((e) => e.id !== confirmarExcluir.id));
       setConfirmarExcluir(null);
     }
   }
 
+  const STATUS_LABEL: Record<StatusEquipe, string> = { ativo: 'Ativo', em_campo: 'Em Campo', inativo: 'Inativo' };
+
   function handleAlternarStatus(id: string) {
     const ciclo: StatusEquipe[] = ['ativo', 'em_campo', 'inativo'];
-    setEquipes((p) => p.map((e) => e.id !== id ? e : { ...e, status: ciclo[(ciclo.indexOf(e.status) + 1) % 3] }));
+    setEquipes((p) => p.map((e) => {
+      if (e.id !== id) return e;
+      const novoStatus = ciclo[(ciclo.indexOf(e.status) + 1) % 3];
+      adicionarNotificacao({
+        cor: novoStatus === 'em_campo' ? '#F97316' : novoStatus === 'ativo' ? '#10B981' : '#94A3B8',
+        icone: novoStatus === 'em_campo' ? 'location-outline' : novoStatus === 'ativo' ? 'checkmark-circle-outline' : 'pause-circle-outline',
+        titulo: 'Status alterado',
+        desc: `${e.nome} (${e.id}) mudou de ${STATUS_LABEL[e.status]} para ${STATUS_LABEL[novoStatus]}.`,
+      });
+      return { ...e, status: novoStatus };
+    }));
   }
 
   function paginasBotoes() {
