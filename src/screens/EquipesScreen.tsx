@@ -34,6 +34,7 @@ import perfilEq   from '../../assets/images/perfil_equipe.jpg';
 
 const ITENS_POR_PAGINA = 7;
 const RODOVIAS = ['Todas', 'BR-116', 'BR-381', 'SP-330'];
+const RODOVIAS_FORM = ['BR-116', 'BR-381', 'SP-330'];
 
 const STATUS_OPTS: { label: string; value: StatusEquipe | 'todas' }[] = [
   { label: 'Todas',    value: 'todas'    },
@@ -48,7 +49,7 @@ type Props = {
 
 export default function EquipesScreen({ navigation }: Props) {
 const { equipes, adicionarEquipe, editarEquipe, excluirEquipe, alternarStatus } = useEquipes();
-  const { adicionarItem, atualizarItem: atualizarItemKanban, removerPorEquipeId } = useKanban();
+  const { itens, adicionarItem, atualizarItem: atualizarItemKanban, removerPorEquipeId } = useKanban();
   const { modoCompacto, notifPrefs } = useConfiguracoes();
   const { usuario, logout } = useAuth();
   const equipesVisiveis = usuario ? getEquipesVisiveis(usuario, equipes) : equipes;
@@ -71,6 +72,7 @@ const { equipes, adicionarEquipe, editarEquipe, excluirEquipe, alternarStatus } 
 
   const [novoNome,    setNovoNome]    = useState('');
   const [novoRodovia, setNovoRodovia] = useState('BR-116');
+  const [rodoviaLivre, setRodoviaLivre] = useState(false);
   const [novoKm,      setNovoKm]      = useState('');
   const [novoTrecho,  setNovoTrecho]  = useState('');
   const [novoResp,    setNovoResp]    = useState('');
@@ -93,28 +95,47 @@ const { equipes, adicionarEquipe, editarEquipe, excluirEquipe, alternarStatus } 
 
   function abrirModalCriar() {
     setEquipeEditando(null);
-    setNovoNome(''); setNovoKm(''); setNovoTrecho(''); setNovoResp(''); setNovoRodovia('BR-116');
+    setNovoNome(''); setNovoKm(''); setNovoTrecho(''); setNovoResp(''); setNovoRodovia('BR-116'); setRodoviaLivre(false);
     setModalCriar(true);
   }
 
   function abrirModalEditar(eq: Equipe) {
     setEquipeEditando(eq);
     setNovoNome(eq.nome); setNovoRodovia(eq.rodovia);
+    setRodoviaLivre(!RODOVIAS_FORM.includes(eq.rodovia));
     setNovoKm(eq.km.replace('Km ', '')); setNovoTrecho(eq.trechoRodovia); setNovoResp(eq.responsavel);
     setModalCriar(true);
   }
 
   function handleSalvar() {
-    if (!novoNome.trim() || !novoKm.trim() || !novoTrecho.trim() || !novoResp.trim()) {
+    if (!novoNome.trim() || !novoKm.trim() || !novoTrecho.trim() || !novoResp.trim() || !novoRodovia.trim()) {
       Alert.alert('Atenção', 'Preencha todos os campos obrigatórios.');
       return;
     }
+    const rodovia = novoRodovia.trim();
+    const kmNum = parseFloat(novoKm.trim()) || 0;
     setModalCriar(false);
     if (equipeEditando) {
+      const rodoviaMudou = equipeEditando.rodovia !== rodovia;
       editarEquipe(equipeEditando.id, {
-        nome: novoNome.trim(), rodovia: novoRodovia,
+        nome: novoNome.trim(), rodovia,
         km: `Km ${novoKm.trim()}`, trechoRodovia: novoTrecho.trim(), responsavel: novoResp.trim(),
       });
+      // Se a rodovia mudou, o(s) trecho(s) dela no Kanban precisam refletir isso
+      // também — senão Equipes e Kanban mostram rodovias diferentes pra mesma equipe.
+      if (rodoviaMudou) {
+        itens
+          .filter((i) => i.equipeId === equipeEditando.id)
+          .forEach((i) => {
+            atualizarItemKanban(i.id, { rodovia, ...coordenadasAproximadas(rodovia, i.kmInicio) });
+          });
+        corrigirComGeocodingSeNecessario(rodovia, kmNum).then((corrigida) => {
+          if (!corrigida) return;
+          itens
+            .filter((i) => i.equipeId === equipeEditando.id)
+            .forEach((i) => atualizarItemKanban(i.id, corrigida));
+        });
+      }
       adicionarNotificacao({
         cor: '#3B82F6', icone: 'create-outline',
         titulo: 'Equipe editada',
@@ -122,27 +143,26 @@ const { equipes, adicionarEquipe, editarEquipe, excluirEquipe, alternarStatus } 
       });
     } else {
       const novoId = adicionarEquipe({
-        nome: novoNome.trim(), rodovia: novoRodovia,
+        nome: novoNome.trim(), rodovia,
         km: `Km ${novoKm.trim()}`, trechoRodovia: novoTrecho.trim(), responsavel: novoResp.trim(),
       });
       // Nova equipe (ativo) → entra automaticamente na coluna 1 do Kanban
-      const kmNum = parseFloat(novoKm.trim()) || 0;
       const novoKanbanId = adicionarItem({
-        equipeId: novoId, nomeEquipe: novoNome.trim(), rodovia: novoRodovia,
+        equipeId: novoId, nomeEquipe: novoNome.trim(), rodovia,
         kmInicio: kmNum, kmFim: kmNum + 5,
         tipoVegetacao: 'Grama Bermuda (Rasteira)', alturaAtual: 2,
         severidade: 'sem_ocorrencia', responsavel: novoResp.trim(),
         observacao: '', ultimoServico: null,
-        ...coordenadasAproximadas(novoRodovia, kmNum),
+        ...coordenadasAproximadas(rodovia, kmNum),
       });
-      corrigirComGeocodingSeNecessario(novoRodovia, kmNum).then((corrigida) => {
+      corrigirComGeocodingSeNecessario(rodovia, kmNum).then((corrigida) => {
         if (corrigida) atualizarItemKanban(novoKanbanId, corrigida);
       });
       setPagina(1);
       adicionarNotificacao({
         cor: '#10B981', icone: 'people-outline',
         titulo: 'Nova equipe criada',
-        desc: `${novoNome.trim()} (${novoId}) foi cadastrada em ${novoRodovia} e adicionada ao Kanban.`,
+        desc: `${novoNome.trim()} (${novoId}) foi cadastrada em ${rodovia} e adicionada ao Kanban.`,
       });
     }
   }
@@ -482,12 +502,25 @@ paginadas.map((eq, idx) => (
             <View style={s.mField}>
               <Text style={s.mLabel}>Rodovia</Text>
               <View style={s.chipRow}>
-                {['BR-116', 'BR-381', 'SP-330'].map((r) => (
-                  <TouchableOpacity key={r} style={[s.chip, novoRodovia === r && s.chipOn]} onPress={() => setNovoRodovia(r)}>
-                    <Text style={[s.chipTxt, novoRodovia === r && s.chipTxtOn]}>{r}</Text>
+                {RODOVIAS_FORM.map((r) => (
+                  <TouchableOpacity key={r} style={[s.chip, !rodoviaLivre && novoRodovia === r && s.chipOn]} onPress={() => { setRodoviaLivre(false); setNovoRodovia(r); }}>
+                    <Text style={[s.chipTxt, !rodoviaLivre && novoRodovia === r && s.chipTxtOn]}>{r}</Text>
                   </TouchableOpacity>
                 ))}
+                <TouchableOpacity style={[s.chip, rodoviaLivre && s.chipOn]} onPress={() => { setRodoviaLivre(true); setNovoRodovia(''); }}>
+                  <Text style={[s.chipTxt, rodoviaLivre && s.chipTxtOn]}>Outra...</Text>
+                </TouchableOpacity>
               </View>
+              {rodoviaLivre && (
+                <TextInput
+                  style={[s.mInput, { outlineStyle: 'none', marginTop: 8 } as any]}
+                  placeholder="Ex: SP-348"
+                  placeholderTextColor={colors.gray400}
+                  value={novoRodovia}
+                  onChangeText={setNovoRodovia}
+                  autoFocus
+                />
+              )}
             </View>
 
             <View style={s.mFooter}>

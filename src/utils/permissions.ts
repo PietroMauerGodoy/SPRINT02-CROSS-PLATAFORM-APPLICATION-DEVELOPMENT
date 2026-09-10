@@ -4,7 +4,7 @@
 //
 // Regra de uso: nenhuma tela decide "quem pode ver o quê" sozinha — toda tela
 // chama uma função daqui e renderiza só o que ela devolver.
-import { Equipe, KanbanItem, Usuario } from '../types';
+import { Equipe, KanbanItem, Ocorrencia, Usuario } from '../types';
 
 // Admin e Gestor têm o mesmo nível de acesso operacional (visualizar/gerenciar
 // tudo); a diferença entre os dois é só nas telas de administração do sistema
@@ -33,6 +33,25 @@ export function podeVerKanbanItem(usuario: Usuario, item: KanbanItem): boolean {
 export function getKanbanItemsVisiveis(usuario: Usuario, itens: KanbanItem[]): KanbanItem[] {
   if (temAcessoTotal(usuario)) return itens;
   return itens.filter((i) => podeVerKanbanItem(usuario, i));
+}
+
+/**
+ * Ocorrência não guarda `equipeId` diretamente — o vínculo é com um trecho do
+ * Kanban (`kanbanItemId`), então o escopo é resolvido através dele: uma
+ * ocorrência só é visível pro Operador de Campo se o trecho vinculado for da
+ * equipe dele. Uma ocorrência cujo trecho não existe mais (ex: item do Kanban
+ * excluído) fica invisível pra quem não tem acesso total, por segurança —
+ * "não consigo confirmar de quem é" deve significar "não mostra", não "mostra".
+ */
+export function podeVerOcorrencia(usuario: Usuario, ocorrencia: Ocorrencia, trechos: KanbanItem[]): boolean {
+  if (temAcessoTotal(usuario)) return true;
+  const trecho = trechos.find((t) => t.id === ocorrencia.kanbanItemId);
+  return trecho?.equipeId === usuario.equipeId;
+}
+
+export function getOcorrenciasVisiveis(usuario: Usuario, ocorrencias: Ocorrencia[], trechos: KanbanItem[]): Ocorrencia[] {
+  if (temAcessoTotal(usuario)) return ocorrencias;
+  return ocorrencias.filter((o) => podeVerOcorrencia(usuario, o, trechos));
 }
 
 // ─── Ações (criar/editar/excluir) ───────────────────────────────────────────

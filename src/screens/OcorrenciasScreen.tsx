@@ -23,7 +23,7 @@ import { useConfiguracoes } from '../context/ConfiguracoesContext';
 import { useAuth } from '../context/AuthContext';
 import { useOcorrencias } from '../context/OcorrenciasContext';
 import { useKanban } from '../context/KanbanContext';
-import { podeCriarOuExcluirOcorrencia, podeVerItemMenuOperacional, ITENS_MENU_SEM_TELA } from '../utils/permissions';
+import { podeCriarOuExcluirOcorrencia, podeVerItemMenuOperacional, getOcorrenciasVisiveis, ITENS_MENU_SEM_TELA } from '../utils/permissions';
 
 import bgRoxo    from '../../assets/images/backgroundroxo.png';
 
@@ -73,9 +73,14 @@ export default function OcorrenciasScreen({ navigation }: Props) {
   const [fRisco,     setFRisco]       = useState<RiscoNivel>('medio');
   const [fResponsavel, setFResponsavel] = useState('');
 
+  const ocorrenciasVisiveis = useMemo(
+    () => (usuario ? getOcorrenciasVisiveis(usuario, ocorrencias, trechos) : []),
+    [usuario, ocorrencias, trechos],
+  );
+
   const filtradas = useMemo(() => {
     const t = busca.toLowerCase();
-    return ocorrencias.filter((o) => {
+    return ocorrenciasVisiveis.filter((o) => {
       const trecho = trechos.find((k) => k.id === o.kanbanItemId);
       const textoTrecho = trecho ? `${trecho.rodovia} ${trecho.nomeEquipe}`.toLowerCase() : '';
       return (
@@ -86,7 +91,7 @@ export default function OcorrenciasScreen({ navigation }: Props) {
         (statusFiltro === 'todos' || o.status === statusFiltro)
       );
     });
-  }, [ocorrencias, trechos, busca, riscoFiltro, statusFiltro]);
+  }, [ocorrenciasVisiveis, trechos, busca, riscoFiltro, statusFiltro]);
 
   const totalPaginas = Math.max(1, Math.ceil(filtradas.length / ITENS_POR_PAGINA));
   const paginaAtual  = Math.min(pagina, totalPaginas);
@@ -109,11 +114,11 @@ export default function OcorrenciasScreen({ navigation }: Props) {
   }
 
   const contadores = useMemo(() => ({
-    total:        ocorrencias.length,
-    abertas:      ocorrencias.filter((o) => o.status === 'aberta').length,
-    em_andamento: ocorrencias.filter((o) => o.status === 'em_andamento').length,
-    resolvidas:   ocorrencias.filter((o) => o.status === 'resolvida').length,
-  }), [ocorrencias]);
+    total:        ocorrenciasVisiveis.length,
+    abertas:      ocorrenciasVisiveis.filter((o) => o.status === 'aberta').length,
+    em_andamento: ocorrenciasVisiveis.filter((o) => o.status === 'em_andamento').length,
+    resolvidas:   ocorrenciasVisiveis.filter((o) => o.status === 'resolvida').length,
+  }), [ocorrenciasVisiveis]);
 
   function abrirDetalhe(ocorrencia: Ocorrencia) {
     navigation.navigate('Detalhe', { ocorrencia });

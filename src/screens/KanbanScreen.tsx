@@ -233,6 +233,7 @@ export default function KanbanScreen({ navigation, route }: Props) {
   // form
   const [fEquipe,      setFEquipe]      = useState('');
   const [fRodovia,     setFRodovia]     = useState('BR-116');
+  const [rodoviaLivre, setRodoviaLivre] = useState(false);
   const [fKmInicio,    setFKmInicio]    = useState('');
   const [fKmFim,       setFKmFim]       = useState('');
   const [fVegetacao,   setFVegetacao]   = useState(VEGETACAO_OPTS[0]);
@@ -390,6 +391,7 @@ export default function KanbanScreen({ navigation, route }: Props) {
   function abrirEditar(item: KanbanItem) {
     setMenuCard(null); setCardDetalhe(null); setItemEditando(item);
     setFEquipe(item.nomeEquipe); setFRodovia(item.rodovia);
+    setRodoviaLivre(!RODOVIAS_FORM.includes(item.rodovia));
     setFKmInicio(String(item.kmInicio)); setFKmFim(String(item.kmFim));
     setFVegetacao(item.tipoVegetacao); setFAltura(String(item.alturaAtual));
     setFResponsavel(item.responsavel);
@@ -399,7 +401,7 @@ export default function KanbanScreen({ navigation, route }: Props) {
 
   function abrirCriar() {
     setItemEditando(null);
-    setFEquipe(''); setFRodovia('BR-116'); setFKmInicio(''); setFKmFim('');
+    setFEquipe(''); setFRodovia('BR-116'); setRodoviaLivre(false); setFKmInicio(''); setFKmFim('');
     setFVegetacao(VEGETACAO_OPTS[0]); setFAltura(''); setFResponsavel(''); setFData(''); setFUltResp('');
     setModalCriar(true);
   }
@@ -410,32 +412,33 @@ export default function KanbanScreen({ navigation, route }: Props) {
     // Abre o modal de criação com o nome já preenchido
     setItemEditando(null);
     setFEquipe(nome);
-    setFRodovia('BR-116'); setFKmInicio(''); setFKmFim('');
+    setFRodovia('BR-116'); setRodoviaLivre(false); setFKmInicio(''); setFKmFim('');
     setFVegetacao(VEGETACAO_OPTS[0]); setFAltura(''); setFResponsavel(''); setFData(''); setFUltResp('');
     setModalCriar(true);
   }
 
   function handleSalvar() {
-    if (!fEquipe.trim() || !fKmInicio.trim() || !fKmFim.trim()) {
+    if (!fEquipe.trim() || !fKmInicio.trim() || !fKmFim.trim() || !fRodovia.trim()) {
       Alert.alert('Atenção', 'Preencha os campos obrigatórios.');
       return;
     }
+    const rodovia = fRodovia.trim();
     const alt = parseFloat(fAltura) || 0;
     const sev: SeveridadeVegetacao = fAltura.trim() ? calcSeveridade(alt) : 'leve';
     const ult = fData.trim() ? { data: fData.trim(), responsavel: fUltResp.trim() } : null;
     setModalCriar(false);
     const kmInicioNum = parseFloat(fKmInicio) || 0;
     if (itemEditando) {
-      const rodoviaMudou = itemEditando.rodovia !== fRodovia || itemEditando.kmInicio !== kmInicioNum;
+      const rodoviaMudou = itemEditando.rodovia !== rodovia || itemEditando.kmInicio !== kmInicioNum;
       atualizarItem(itemEditando.id, {
-        nomeEquipe: fEquipe.trim(), rodovia: fRodovia,
+        nomeEquipe: fEquipe.trim(), rodovia,
         kmInicio: kmInicioNum, kmFim: parseFloat(fKmFim) || 0,
         tipoVegetacao: fVegetacao, alturaAtual: alt, severidade: sev,
         responsavel: fResponsavel.trim(), ultimoServico: ult,
-        ...(rodoviaMudou ? coordenadasAproximadas(fRodovia, kmInicioNum) : {}),
+        ...(rodoviaMudou ? coordenadasAproximadas(rodovia, kmInicioNum) : {}),
       });
       if (rodoviaMudou) {
-        corrigirComGeocodingSeNecessario(fRodovia, kmInicioNum).then((corrigida) => {
+        corrigirComGeocodingSeNecessario(rodovia, kmInicioNum).then((corrigida) => {
           if (corrigida) atualizarItem(itemEditando.id, corrigida);
         });
       }
@@ -446,13 +449,13 @@ export default function KanbanScreen({ navigation, route }: Props) {
       });
     } else {
       const novoId = adicionarItem({
-        equipeId: '', nomeEquipe: fEquipe.trim(), rodovia: fRodovia,
+        equipeId: '', nomeEquipe: fEquipe.trim(), rodovia,
         kmInicio: kmInicioNum, kmFim: parseFloat(fKmFim) || 0,
         tipoVegetacao: fVegetacao, alturaAtual: alt, severidade: sev,
         responsavel: fResponsavel.trim(), observacao: '', ultimoServico: ult,
-        ...coordenadasAproximadas(fRodovia, kmInicioNum),
+        ...coordenadasAproximadas(rodovia, kmInicioNum),
       });
-      corrigirComGeocodingSeNecessario(fRodovia, kmInicioNum).then((corrigida) => {
+      corrigirComGeocodingSeNecessario(rodovia, kmInicioNum).then((corrigida) => {
         if (corrigida) atualizarItem(novoId, corrigida);
       });
       adicionarNotificacao({
@@ -914,11 +917,24 @@ export default function KanbanScreen({ navigation, route }: Props) {
                 <Text style={s.mLabel}>Rodovia</Text>
                 <View style={s.chipRow}>
                   {RODOVIAS_FORM.map((r) => (
-                    <TouchableOpacity key={r} style={[s.chip, fRodovia === r && s.chipOn]} onPress={() => setFRodovia(r)}>
-                      <Text style={[s.chipTxt, fRodovia === r && s.chipTxtOn]}>{r}</Text>
+                    <TouchableOpacity key={r} style={[s.chip, !rodoviaLivre && fRodovia === r && s.chipOn]} onPress={() => { setRodoviaLivre(false); setFRodovia(r); }}>
+                      <Text style={[s.chipTxt, !rodoviaLivre && fRodovia === r && s.chipTxtOn]}>{r}</Text>
                     </TouchableOpacity>
                   ))}
+                  <TouchableOpacity style={[s.chip, rodoviaLivre && s.chipOn]} onPress={() => { setRodoviaLivre(true); setFRodovia(''); }}>
+                    <Text style={[s.chipTxt, rodoviaLivre && s.chipTxtOn]}>Outra...</Text>
+                  </TouchableOpacity>
                 </View>
+                {rodoviaLivre && (
+                  <TextInput
+                    style={[s.mInput, { marginTop: 8 }]}
+                    placeholder="Ex: SP-348"
+                    placeholderTextColor={colors.gray400}
+                    value={fRodovia}
+                    onChangeText={setFRodovia}
+                    autoFocus
+                  />
+                )}
               </View>
               <View style={s.mField}>
                 <Text style={s.mLabel}>Tipo de Vegetação</Text>
