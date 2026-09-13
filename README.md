@@ -119,7 +119,9 @@ Nove providers envolvem a aplicação em `App.tsx`: `ToastProvider`, `UsuariosPr
 
 ### Controle de acesso por papel (RBAC)
 
-O app tem 3 papéis de usuário, cada um com um escopo de dados diferente:
+O app tem 3 papéis de usuário, cada um com um escopo de dados diferente.
+
+> **Guia detalhado:** [`docs/papeis-e-permissoes.md`](docs/papeis-e-permissoes.md) — explica recurso por recurso (Equipes, Kanban, Ocorrências, Trechos, Dashboard, Configurações) o que cada papel vê e faz, com referência exata a cada função de `permissions.ts`. A tabela abaixo é o resumo rápido.
 
 | Recurso | Admin | Gestor | Operador de Campo |
 |---|---|---|---|
