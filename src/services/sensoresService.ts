@@ -11,7 +11,7 @@ import { LeituraSensorRaw } from '../types';
 // 3. Apagar `buscarLeiturasMock()`.
 // Nada em KanbanContext, no botão ou em qualquer outra tela muda — todo mundo
 // só conhece a assinatura `buscarLeiturasSensor(): Promise<LeituraSensorRaw[]>`.
-const BASE_URL = ''; // TODO: preencher com o endpoint real (ex: 'https://api.exemplo.com/sensores/leituras')
+const BASE_URL = ''; // TODO: preencher com o endpoint real (ex: 'http://192.168.0.10:3000/sensores/leituras')
 
 // Formato esperado do GET (a API deve devolver exatamente isto — um array,
 // não um objeto envelopado tipo `{ data: [...] }`):

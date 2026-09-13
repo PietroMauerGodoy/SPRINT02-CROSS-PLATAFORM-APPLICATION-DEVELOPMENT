@@ -221,7 +221,7 @@ Os 10 trechos mockados (`K01`–`K10`) usam 3 rodovias **confirmadas como admini
 
 Além dos dados mockados e das APIs de clima/geocodificação, o Kanban tem um fluxo pensado pra receber leituras reais de sensores de altura de vegetação em campo — hoje simulado por um mock, mas com a mesma forma que o dado real vai ter.
 
-> **Vai implementar a API de verdade?** Ver [`docs/integracao-api-sensores.md`](docs/integracao-api-sensores.md) — guia completo com o contrato exato esperado, onde plugar o endpoint (3 passos, um arquivo só) e um checklist de teste. O resumo abaixo é só pra quem quer entender o fluxo, não pra quem vai implementar.
+> **A API já existe** — `/api` neste repositório (Node + TypeScript + Express, ver [`api/README.md`](api/README.md)). Falta só rodar na mesma rede do ESP32 e apontar `src/services/sensoresService.ts` pra ela. Contrato exato e checklist de teste em [`docs/integracao-api-sensores.md`](docs/integracao-api-sensores.md). O resumo abaixo é só pra quem quer entender o fluxo geral.
 
 **Fluxo (ESP32 → API → botão "Atualizar"):** um ESP32 com sensor ultrassônico (HC-SR04) instalado no acostamento faz `POST` direto, via WiFi, pra uma API própria — sem LoRa, sem gateway intermediário. O app **nunca recebe esse POST**: ele funciona em modo *pull*, buscando (`GET`) o lote de leituras disponível só quando alguém aperta **"Atualizar"** ao lado do filtro de Rodovias no Kanban (visível só pra Admin/Gestor — Operador de Campo não sincroniza sensores, mesma regra de quem pode criar/excluir item do Kanban). Hoje essa busca é 100% mock (`src/services/sensoresService.ts`, função `buscarLeiturasSensor()`), com um `// TODO` marcando exatamente onde entra o `fetch` real — nada em quem consome (Context, botão) muda quando a API existir de verdade.
 
@@ -251,6 +251,29 @@ Além dos dados mockados e das APIs de clima/geocodificação, o Kanban tem um f
 
 Testado ao vivo: Operador de Campo (Maria) não vê o botão; Admin vê, sincroniza e os cards afetados atualizam altura/severidade na hora (incluindo o caso de duas leituras de kms diferentes caindo no mesmo card — o resultado final foi a menor das duas), a leitura órfã gerou o `console.warn` esperado sem quebrar nada, e a notificação com a contagem certa de cards apareceu no sino.
 
+### O que falta e próximos passos (IoT)
+
+Testado de ponta a ponta com a API rodando local: subir servidor, `POST` simulando o ESP32, `GET` simulando o app, e o app de verdade puxando e atualizando os cards. **As duas únicas coisas que faltam não são código do app nem da API** — são hardware/config:
+
+1. **O ESP32 físico.** O firmware (código Arduino/C++, que roda *no próprio ESP32*, fora deste repositório) precisa fazer um `POST` pro endpoint abaixo a cada leitura do sensor HC-SR04:
+   ```
+   POST http://192.168.15.19:3000/sensores/leituras
+   Content-Type: application/json
+
+   { "id": "5.0", "altura": 18.5 }
+   ```
+   (`id` = km do ponto onde o sensor está instalado, como texto; `altura` = altura medida em cm — ver contrato completo em [`docs/integracao-api-sensores.md`](docs/integracao-api-sensores.md)). Esse código Arduino ainda não foi escrito — é outro domínio (C++ embarcado), fora do escopo deste repositório React Native, mas dá pra pedir ajuda com ele também quando chegar a hora.
+
+2. **Trocar `BASE_URL` em `src/services/sensoresService.ts`.** Hoje o app usa o mock por decisão do time. Quando o ESP32 estiver pronto:
+   ```ts
+   const BASE_URL = 'http://192.168.15.19:3000/sensores/leituras';
+   ```
+   e trocar `buscarLeiturasMock()` por `buscarLeiturasApi()` dentro de `buscarLeiturasSensor()`.
+
+> `192.168.15.19` é o IP do notebook (Wi-Fi "Home") no momento em que isso foi escrito — **esse IP muda toda vez que o notebook troca de rede** (outra sala, outro roteador). Antes de cada demo/apresentação, rode `ipconfig` (Windows) de novo, pegue o "Endereço IPv4" do adaptador Wi-Fi conectado, e atualize os dois lugares acima (firmware do ESP32 e `BASE_URL`) se o IP tiver mudado. Notebook, ESP32 e o dispositivo rodando o app **precisam estar na mesma rede Wi-Fi** pra isso funcionar — ver [`api/README.md`](api/README.md) pra mais detalhes (inclusive sobre o Firewall do Windows, que pode bloquear a conexão vinda do ESP32 se não for liberado).
+
+Até lá, a API já está pronta e testada pra receber esse `POST` assim que o ESP32 existir — não falta nenhum ajuste de código, só ligar o hardware.
+
 ---
 
 ## O que está pronto
@@ -273,7 +296,7 @@ Testado ao vivo: Operador de Campo (Maria) não vê o botão; Admin vê, sincron
 - **Seletor de idioma decorativo:** `Configurações → Preferências → Idioma` salva o valor escolhido, mas não existe nenhuma lib de i18n no projeto — nada na tela é traduzido de fato.
 - **"Modo compacto" só afeta a tabela de Equipes** — Kanban, Ocorrências e outras listas ainda não reagem a essa preferência.
 - **Mapa nativo (`react-native-maps`) não confirmado num dispositivo/simulador real** — implementado e sem erro de `tsc`, mas este ambiente de desenvolvimento não tem simulador iOS/Android nem aparelho conectado pra validar visualmente (diferente do mapa Web, testado ao vivo). Ver [Mapa](#mapa).
-- **API real de sensores IoT ainda não existe** — `sensoresService.ts` é 100% mock hoje (por decisão explícita: a ideia desta etapa era validar o visual/fluxo do botão "Atualizar" antes do backend do ESP32 estar pronto). A troca pro `fetch` real é isolada nesse arquivo (`// TODO` marcando onde entra) e não deve exigir tocar em `KanbanContext` nem no componente do botão.
+- **A API de sensores IoT existe (`/api`), mas o app ainda aponta pro mock por padrão** — `src/services/sensoresService.ts` continua usando `buscarLeiturasMock()` hoje; a API real (Node/Express/TypeScript, `/api` neste repositório — ver [`api/README.md`](api/README.md)) já está implementada, testada de ponta a ponta (GET/POST reais, inclusive com o app consumindo e recalculando severidade corretamente) e pronta pra rodar na mesma rede WiFi do ESP32. Falta só trocar `BASE_URL` e a chamada em `sensoresService.ts` quando o ESP32 estiver pronto em campo — guia completo em [`docs/integracao-api-sensores.md`](docs/integracao-api-sensores.md).
 
 De 5 toggles que existiam em `Configurações → Notificações`, só 2 tinham função real (`Nova ocorrência crítica` e `Mudança de status de equipe`); os outros 3 (`Prazo de trecho vencendo`, `Relatório semanal disponível`, `Receber também por e-mail`) foram escondidos por não terem nenhuma feature real por trás (não existe sistema de prazo de trecho, geração de relatório semanal, nem envio de e-mail no app hoje).
 
@@ -318,6 +341,7 @@ Além disso, `SincronizarEquipesKanban` (`src/context/SincronizarEquipesKanban.t
 20. ~~Não tinha como atribuir um Operador a uma equipe direto na tela Equipes~~ — **implementado, por pedido explícito.** O campo "Responsável" do modal Nova Equipe/Editar virou um seletor de chips com os Operadores de Campo cadastrados (mais um chip "Outro..." pra texto livre, pra responsável sem login no sistema). Escolher um operador sincroniza `equipeIds` dele com essa equipe na hora (`editarUsuario`, chamado de `EquipesScreen.handleSalvar`) — o mesmo campo que já controlava o que ele vê no Kanban/Ocorrências/Dashboard, agora acessível dos dois lados (Gestão de Usuários e Equipes). Testado ao vivo: criei uma equipe como Gestor escolhendo "Maria Santos" como responsável, confirmei `maria.equipeIds` atualizado no storage, e loguei como Maria confirmando que o novo trecho já aparecia no Kanban dela.
 21. ~~Atribuir uma segunda equipe a um Operador substituía a primeira~~ — **corrigido.** `Usuario.equipeId` era um campo único (`string`) — um Operador de Campo só podia estar em uma equipe por vez, e atribuir uma equipe nova sobrescrevia a anterior em vez de somar. Virou `Usuario.equipeIds: string[]`, com migração automática pra quem já tinha o formato antigo salvo (`comEquipeIds()` em `UsuariosContext.tsx`, sem perder o vínculo existente). `permissions.ts` (visibilidade de Equipes/Kanban/Ocorrências), Gestão de Usuários (agora multi-seleção de equipes) e o seletor de "Responsável" na tela Equipes foram todos atualizados pra tratar isso como lista. Testado ao vivo: migrei um usuário salvo no formato antigo e confirmei o acesso preservado; atribuí duas equipes novas pra Maria em sequência e confirmei que ela ficou com as três (a original do mock + as duas novas) — nenhuma foi perdida.
 22. *(Investigado, não era bug)* Card de uma equipe recém-criada "sumia" do Kanban depois de criar outra equipe em seguida — tentei reproduzir a sequência relatada (criar → excluir → criar de novo reaproveitando o número do id) duas vezes num ambiente limpo e os dois cards sempre ficaram corretos. A causa real era outra: o ícone de "alternar status" (setas azuis, ao lado de Editar/Excluir) desativa a equipe com um único clique direto, sem confirmação — e equipe "Inativo" nunca tem card no Kanban (comportamento correto, documentado desde o início). Um clique acidental nesse ícone já bastava pra parecer que um card "sumiu". Corrigido o UX real do achado: **desativar agora pede confirmação** (modal igual ao de excluir, avisando que o card some do Kanban), reativar continua direto (não tem efeito destrutivo). De quebra, endureci `EquipesContext.adicionarEquipe()`: o cálculo do próximo número de id agora lê sempre do estado mais recente dentro do updater funcional do `setEquipes`, em vez de um valor capturado no closure — evita qualquer colisão teórica de id sob chamadas rápidas em sequência.
+23. **API de sensores IoT implementada** (`/api`, Node + TypeScript + Express, ver [`api/README.md`](api/README.md)) — dois endpoints (`POST /sensores/leituras` pro ESP32 empurrar leituras, `GET /sensores/leituras` pro app buscar o lote e consumir/esvaziar o buffer), dados em memória (decisão explícita pra essa etapa — sem banco, mais simples de rodar numa demo em sala). Testado de ponta a ponta de verdade: subi a API local, mandei leituras reais via `curl` (incluindo lote em array e um payload inválido pra confirmar o `400`), apontei o app pra ela temporariamente, apertei "Atualizar" no Kanban e confirmei os cards certos recalculando altura/severidade a partir da resposta real da API (não do mock) — depois revertido pro mock, já que o app continua usando o mock por padrão até o ESP32 estar pronto em campo. Pensada pra rodar na mesma rede WiFi do notebook com o ESP32 (sem deploy em nuvem, por decisão do time).
 
 ---
 

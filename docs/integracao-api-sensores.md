@@ -1,8 +1,15 @@
 # Integração da API de Sensores IoT — guia pra quem for implementar
 
-Este documento é pra quem vai clonar o projeto **Motiva** e construir a API real que
+> **Atualização: a API já existe** — está em [`/api`](../api) neste mesmo
+> repositório (Node + TypeScript + Express, dados em memória). Ver
+> [`api/README.md`](../api/README.md) pra rodar e conectar na mesma rede WiFi
+> do ESP32. Este documento continua valendo como referência do **contrato**
+> (formato exato esperado) e de como o app consome isso — útil tanto pra quem
+> for mexer na API existente quanto se um dia ela for reescrita do zero.
+
+Este documento é pra quem vai clonar o projeto **Motiva** e conectar a API real que
 alimenta o botão **"Atualizar"** da tela Kanban. O app já está 100% pronto do lado
-front-end — falta só a API existir e você trocar 3 linhas num arquivo.
+front-end — falta só apontar pra API e trocar 3 linhas num arquivo.
 
 ---
 
@@ -11,14 +18,14 @@ front-end — falta só a API existir e você trocar 3 linhas num arquivo.
 Tudo fica isolado em **`src/services/sensoresService.ts`**. Nenhum outro arquivo do
 projeto precisa ser tocado.
 
-1. Preencha a constante `BASE_URL` no topo do arquivo com o endpoint real (`GET`, sem parâmetros).
+1. Preencha a constante `BASE_URL` no topo do arquivo com o endpoint real (`GET`, sem parâmetros) — ver [`api/README.md`](../api/README.md) pra achar o IP certo (mesma rede WiFi do ESP32).
 2. Dentro de `buscarLeiturasSensor()`, troque a chamada de `buscarLeiturasMock()` para `buscarLeiturasApi()` (essa função já existe no arquivo, pronta e funcional, só não está em uso ainda).
 3. Apague `buscarLeiturasMock()` — não é mais usada.
 
 ```ts
 // src/services/sensoresService.ts
 
-const BASE_URL = 'https://sua-api-aqui.com/sensores/leituras'; // passo 1
+const BASE_URL = 'http://192.168.0.10:3000/sensores/leituras'; // passo 1 — IP do notebook na rede WiFi
 
 export async function buscarLeiturasSensor(): Promise<LeituraSensorRaw[]> {
   try {
@@ -123,7 +130,7 @@ entender por que a API pode ser "burra" (devolver os dados crus, sem agregação
   usuário quantos trechos foram atualizados.
 
 Ou seja: **a API só precisa devolver leituras cruas**. Toda a lógica de negócio
-already existe no client.
+já existe no client.
 
 ---
 
@@ -131,19 +138,26 @@ already existe no client.
 
 | Arquivo | O que tem |
 |---|---|
-| `src/services/sensoresService.ts` | **Único arquivo que você precisa editar.** Busca as leituras (mock hoje, sua API depois). |
+| `src/services/sensoresService.ts` | **Único arquivo do app que você precisa editar** pra apontar pra API (mock hoje, `BASE_URL` real depois). |
 | `src/types/index.ts` | Tipo `LeituraSensorRaw = { id: string; altura: number }` — o contrato. |
 | `src/utils/agregacaoSensores.ts` | Regra do menor valor + mapeamento km→trecho (lógica pura, não precisa mexer). |
 | `src/context/KanbanContext.tsx` | Função `aplicarLeiturasSensor()` — aplica as leituras já agregadas nos cards do Kanban. |
 | `src/components/kanban/BotaoAtualizarSincronizacao.tsx` | O botão "Atualizar" em si (estados idle/sincronizando/sucesso/erro). |
+| `api/` | **A API em si** (Node + Express + TypeScript). Ver [`api/README.md`](../api/README.md). |
 
 ---
 
-## Como rodar o projeto localmente pra testar sua API
+## Como rodar tudo localmente pra testar
 
+Terminal 1 — a API:
 ```bash
-git clone <url-do-repositorio>
-cd SPRINT-CROSS-PLATAFORM-APPLICATION-DEVELOPMENT
+cd api
+npm install
+npm run dev
+```
+
+Terminal 2 — o app:
+```bash
 npm install
 npx expo start --web
 ```
@@ -154,6 +168,13 @@ Login de teste (Admin ou Gestor — só esses papéis veem o botão "Atualizar")
 |---|---|
 | `admin` | `123456` |
 | `joao` | `123456` |
+
+Manda uma leitura de teste pra API (simulando o ESP32):
+```bash
+curl -X POST http://localhost:3000/sensores/leituras \
+  -H "Content-Type: application/json" \
+  -d '{"id":"5.0","altura":12.3}'
+```
 
 Vá em **Kanban**, confira os `kmInicio`/`kmFim` dos trechos que já existem lá (ou
 crie um novo trecho com o km que você quer testar), aperte **"Atualizar"**, e veja
