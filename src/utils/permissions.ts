@@ -17,7 +17,7 @@ function temAcessoTotal(usuario: Usuario): boolean {
 
 export function podeVerEquipe(usuario: Usuario, equipe: Equipe): boolean {
   if (temAcessoTotal(usuario)) return true;
-  return equipe.id === usuario.equipeId;
+  return (usuario.equipeIds ?? []).includes(equipe.id);
 }
 
 export function getEquipesVisiveis(usuario: Usuario, equipes: Equipe[]): Equipe[] {
@@ -27,7 +27,7 @@ export function getEquipesVisiveis(usuario: Usuario, equipes: Equipe[]): Equipe[
 
 export function podeVerKanbanItem(usuario: Usuario, item: KanbanItem): boolean {
   if (temAcessoTotal(usuario)) return true;
-  return item.equipeId === usuario.equipeId;
+  return (usuario.equipeIds ?? []).includes(item.equipeId);
 }
 
 export function getKanbanItemsVisiveis(usuario: Usuario, itens: KanbanItem[]): KanbanItem[] {
@@ -46,7 +46,7 @@ export function getKanbanItemsVisiveis(usuario: Usuario, itens: KanbanItem[]): K
 export function podeVerOcorrencia(usuario: Usuario, ocorrencia: Ocorrencia, trechos: KanbanItem[]): boolean {
   if (temAcessoTotal(usuario)) return true;
   const trecho = trechos.find((t) => t.id === ocorrencia.kanbanItemId);
-  return trecho?.equipeId === usuario.equipeId;
+  return trecho ? (usuario.equipeIds ?? []).includes(trecho.equipeId) : false;
 }
 
 export function getOcorrenciasVisiveis(usuario: Usuario, ocorrencias: Ocorrencia[], trechos: KanbanItem[]): Ocorrencia[] {
@@ -62,7 +62,7 @@ export function podeGerenciarEquipes(usuario: Usuario): boolean {
 
 export function podeEditarKanbanItem(usuario: Usuario, item: KanbanItem): boolean {
   if (temAcessoTotal(usuario)) return true;
-  return item.equipeId === usuario.equipeId;
+  return (usuario.equipeIds ?? []).includes(item.equipeId);
 }
 
 export function podeCriarOuExcluirKanbanItem(usuario: Usuario): boolean {
@@ -105,6 +105,13 @@ export function podeGerenciarUsuarios(usuario: Usuario): boolean {
  * que não existe recurso implementado. "Trechos" fica visível pra todo mundo
  * (mesmo sem tela própria ainda) porque o dado de trecho já existe e já é
  * visível/filtrado por papel dentro do Kanban.
+ *
+ * Mesma função também usada pra esconder o item "Equipes" do Operador de
+ * Campo (esse tem tela real, só não faz sentido pro papel: Operador é membro
+ * de uma equipe, não gerencia equipes — quem atribui um Operador a uma
+ * equipe é Admin/Gestor, em Configurações → Gestão de Usuários). Cada tela
+ * filtra isso na hora de montar a lista de itens da sidebar (ver
+ * `mostrarOperacional` em qualquer uma das telas com sidebar).
  */
 export function podeVerItemMenuOperacional(usuario: Usuario): boolean {
   return temAcessoTotal(usuario);

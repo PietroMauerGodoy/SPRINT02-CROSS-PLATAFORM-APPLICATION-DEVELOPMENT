@@ -47,7 +47,7 @@ export default function UsuariosSection() {
   const [fEmail,  setFEmail]  = useState('');
   const [fSenha,  setFSenha]  = useState('');
   const [fPapel,  setFPapel]  = useState<PapelUsuario>('operador_campo');
-  const [fEquipeId, setFEquipeId] = useState<string | null>(null);
+  const [fEquipeIds, setFEquipeIds] = useState<string[]>([]);
   const [erroNome,    setErroNome]    = useState<string | null>(null);
   const [erroUsuario, setErroUsuario] = useState<string | null>(null);
   const [erroSenha,   setErroSenha]   = useState<string | null>(null);
@@ -57,7 +57,7 @@ export default function UsuariosSection() {
   function abrirAdicionar() {
     setEditandoId(null);
     setFNome(''); setFUsuario(''); setFEmail(''); setFSenha('');
-    setFPapel('operador_campo'); setFEquipeId(null);
+    setFPapel('operador_campo'); setFEquipeIds([]);
     setErroNome(null); setErroUsuario(null); setErroSenha(null); setErroEquipe(null); setErroUsuarioDup(null);
     setModalAberto(true);
   }
@@ -67,7 +67,7 @@ export default function UsuariosSection() {
     if (!u) return;
     setEditandoId(id);
     setFNome(u.nome); setFUsuario(u.usuario); setFEmail(u.email ?? ''); setFSenha('');
-    setFPapel(u.papel); setFEquipeId(u.equipeId ?? null);
+    setFPapel(u.papel); setFEquipeIds(u.equipeIds ?? []);
     setErroNome(null); setErroUsuario(null); setErroSenha(null); setErroEquipe(null); setErroUsuarioDup(null);
     setModalAberto(true);
   }
@@ -83,8 +83,8 @@ export default function UsuariosSection() {
     if (v.length < 6) return 'A senha deve ter no mínimo 6 caracteres.';
     return null;
   }
-  function validarEquipe(v: string | null, papel: PapelUsuario): string | null {
-    if (papel === 'operador_campo' && !v) return 'Selecione a equipe do operador.';
+  function validarEquipe(v: string[], papel: PapelUsuario): string | null {
+    if (papel === 'operador_campo' && v.length === 0) return 'Selecione ao menos uma equipe do operador.';
     return null;
   }
 
@@ -92,7 +92,7 @@ export default function UsuariosSection() {
     const eNome    = validarNome(fNome);
     const eUsuario = validarUsuario(fUsuario);
     const eSenha   = validarSenha(fSenha);
-    const eEquipe  = validarEquipe(fEquipeId, fPapel);
+    const eEquipe  = validarEquipe(fEquipeIds, fPapel);
     setErroNome(eNome);
     setErroUsuario(eUsuario);
     setErroSenha(eSenha);
@@ -108,7 +108,7 @@ export default function UsuariosSection() {
       senha: fSenha !== '' ? fSenha : (usuarioExistente?.senha ?? fSenha),
       cargo: PAPEL_LABEL[fPapel],
       papel: fPapel,
-      equipeId: fPapel === 'operador_campo' ? (fEquipeId ?? undefined) : undefined,
+      equipeIds: fPapel === 'operador_campo' ? fEquipeIds : undefined,
     };
 
     if (editandoId === null) {
@@ -159,8 +159,8 @@ export default function UsuariosSection() {
               <Image source={perfilLogo} style={styles.avatar} resizeMode="cover" />
               <View style={{ flex: 1 }}>
                 <Text style={styles.tdNome}>{u.nome}</Text>
-                {u.papel === 'operador_campo' && u.equipeId ? (
-                  <Text style={styles.tdSub}>{u.equipeId}</Text>
+                {u.papel === 'operador_campo' && u.equipeIds?.length ? (
+                  <Text style={styles.tdSub}>{u.equipeIds.join(', ')}</Text>
                 ) : null}
               </View>
             </View>
@@ -265,17 +265,23 @@ export default function UsuariosSection() {
 
             {fPapel === 'operador_campo' && (
               <View style={styles.field}>
-                <Text style={styles.label}>Equipe</Text>
+                <Text style={styles.label}>Equipes</Text>
                 <View style={styles.chipRow}>
-                  {equipes.map((eq) => (
-                    <TouchableOpacity
-                      key={eq.id}
-                      style={[styles.chip, fEquipeId === eq.id && { backgroundColor: colors.primary, borderColor: colors.primary }]}
-                      onPress={() => { setFEquipeId(eq.id); setErroEquipe(null); }}
-                    >
-                      <Text style={[styles.chipTxt, fEquipeId === eq.id && styles.chipTxtOn]}>{eq.nome}</Text>
-                    </TouchableOpacity>
-                  ))}
+                  {equipes.map((eq) => {
+                    const selecionada = fEquipeIds.includes(eq.id);
+                    return (
+                      <TouchableOpacity
+                        key={eq.id}
+                        style={[styles.chip, selecionada && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+                        onPress={() => {
+                          setFEquipeIds((prev) => selecionada ? prev.filter((id) => id !== eq.id) : [...prev, eq.id]);
+                          setErroEquipe(null);
+                        }}
+                      >
+                        <Text style={[styles.chipTxt, selecionada && styles.chipTxtOn]}>{eq.nome}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
                 {erroEquipe ? <Text style={styles.erro}>{erroEquipe}</Text> : null}
               </View>

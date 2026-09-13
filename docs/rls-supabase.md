@@ -24,7 +24,6 @@ create table usuarios (
   nome text not null,
   email text,
   papel papel_usuario not null,
-  equipe_id uuid references equipes(id), -- obrigatório na prática só p/ operador_campo
   cargo text
 );
 
@@ -36,6 +35,15 @@ create table equipes (
   km text,
   trecho_rodovia text,
   responsavel text
+);
+
+-- Um Operador de Campo pode estar em mais de uma equipe (equivalente a
+-- Usuario.equipeIds: string[] em types/index.ts) — N:N via tabela de junção,
+-- em vez de uma coluna equipe_id única em usuarios.
+create table usuarios_equipes (
+  usuario_id uuid references usuarios(id) on delete cascade,
+  equipe_id uuid references equipes(id) on delete cascade,
+  primary key (usuario_id, equipe_id)
 );
 
 create table kanban_itens (
@@ -93,9 +101,12 @@ create or replace function current_papel() returns papel_usuario as $$
   select papel from usuarios where auth_user_id = auth.uid();
 $$ language sql stable security definer;
 
--- Equivalente a "usuario.equipeId" em permissions.ts
-create or replace function current_equipe_id() returns uuid as $$
-  select equipe_id from usuarios where auth_user_id = auth.uid();
+-- Equivalente a "usuario.equipeIds" em permissions.ts — um Operador de Campo
+-- pode estar em mais de uma equipe, então isso é N:N (tabela de junção
+-- usuarios_equipes), não uma coluna equipe_id única no usuário.
+create or replace function equipes_do_usuario_atual() returns setof uuid as $$
+  select equipe_id from usuarios_equipes
+  where usuario_id = (select id from usuarios where auth_user_id = auth.uid());
 $$ language sql stable security definer;
 
 -- Equivalente a temAcessoTotal(usuario) — admin ou gestor
@@ -116,7 +127,7 @@ create policy "select_equipes_por_papel" on equipes
   for select
   using (
     tem_acesso_total()
-    or id = current_equipe_id()
+    or id in (select equipes_do_usuario_atual())
   );
 
 -- podeGerenciarEquipes(usuario) — admin/gestor criam, editam, excluem
@@ -140,7 +151,7 @@ create policy "select_kanban_por_papel" on kanban_itens
   for select
   using (
     tem_acesso_total()
-    or equipe_id = current_equipe_id()
+    or equipe_id in (select equipes_do_usuario_atual())
   );
 
 -- podeEditarKanbanItem(usuario, item) — admin/gestor qualquer trecho;
@@ -149,7 +160,7 @@ create policy "editar_kanban_por_papel" on kanban_itens
   for update
   using (
     tem_acesso_total()
-    or equipe_id = current_equipe_id()
+    or equipe_id in (select equipes_do_usuario_atual())
   );
 
 -- podeCriarOuExcluirKanbanItem(usuario) — só admin/gestor

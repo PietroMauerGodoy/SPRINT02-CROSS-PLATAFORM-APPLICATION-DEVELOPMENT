@@ -9,6 +9,17 @@ import { mockUsuarios } from '../data/mockData';
 // devem continuar usando esse dado obsoleto.
 const STORAGE_KEY = '@motiva:usuarios:v2';
 
+// Migra dado salvo antes de `equipeId` (única equipe) virar `equipeIds`
+// (várias equipes por Operador de Campo) — sem isso, um usuário salvo com o
+// formato antigo perderia o vínculo com a equipe dele (equipeIds ficaria
+// undefined). Não bumped a versão da chave pra isso: diferente da mudança de
+// v1→v2, aqui não há perda de informação, só precisa ser traduzida.
+function comEquipeIds(u: Usuario & { equipeId?: string }): Usuario {
+  if (Array.isArray(u.equipeIds)) return u;
+  const { equipeId, ...resto } = u;
+  return { ...resto, equipeIds: equipeId ? [equipeId] : [] };
+}
+
 type UsuariosContextType = {
   usuarios: Usuario[];
   adicionarUsuario: (dados: Omit<Usuario, 'id'>) => boolean;
@@ -16,6 +27,11 @@ type UsuariosContextType = {
   removerUsuario: (id: number) => void;
   /** Única fonte de verificação de credenciais — usada pelo AuthContext.login(). */
   buscarPorCredenciais: (usuario: string, senha: string) => Usuario | undefined;
+  /** Remove uma equipe de `equipeIds` de qualquer usuário que apontava pra ela
+   *  (sem mexer nas outras equipes que ele já tinha) — chamado ao excluir uma
+   *  equipe, pra nenhum Operador de Campo ficar com um vínculo pra uma equipe
+   *  que não existe mais (ver EquipesScreen.confirmarDelete). */
+  desvincularEquipe: (equipeId: string) => void;
 };
 
 const UsuariosContext = createContext<UsuariosContextType | null>(null);
@@ -33,7 +49,7 @@ export function UsuariosProvider({ children }: { children: ReactNode }) {
         if (!raw) return;
         const parsed = JSON.parse(raw) as Usuario[];
         if (Array.isArray(parsed) && parsed.length > 0 && !ignore) {
-          setUsuarios(parsed);
+          setUsuarios(parsed.map(comEquipeIds));
         }
       } catch {
         // ignora erro e mantém o seed de mockUsuarios
@@ -78,9 +94,15 @@ export function UsuariosProvider({ children }: { children: ReactNode }) {
     return usuarios.find((u) => u.usuario === usuarioDigitado && u.senha === senha);
   }
 
+  function desvincularEquipe(equipeId: string) {
+    setUsuarios((prev) => prev.map((u) =>
+      u.equipeIds?.includes(equipeId) ? { ...u, equipeIds: u.equipeIds.filter((id) => id !== equipeId) } : u,
+    ));
+  }
+
   return (
     <UsuariosContext.Provider
-      value={{ usuarios, adicionarUsuario, editarUsuario, removerUsuario, buscarPorCredenciais }}
+      value={{ usuarios, adicionarUsuario, editarUsuario, removerUsuario, buscarPorCredenciais, desvincularEquipe }}
     >
       {children}
     </UsuariosContext.Provider>

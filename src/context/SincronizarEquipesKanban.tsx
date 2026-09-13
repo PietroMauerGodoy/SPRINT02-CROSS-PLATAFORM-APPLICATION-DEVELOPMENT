@@ -2,22 +2,26 @@ import { useEffect } from 'react';
 import { useEquipes } from './EquipesContext';
 import { useKanban } from './KanbanContext';
 import { coordenadasAproximadas, corrigirComGeocodingSeNecessario } from '../utils/geo';
-import { equipesSemCardNoKanban } from '../utils/equipeKanbanSync';
+import { cardsOrfaos, equipesSemCardNoKanban } from '../utils/equipeKanbanSync';
 
 /**
- * Garante o mesmo invariante que já vale ao criar uma equipe pela tela
- * (Equipes → Nova Equipe sempre gera um card no Kanban): toda equipe com
- * status diferente de 'inativo' tem pelo menos um card no Kanban. Sem isso,
- * uma equipe pode ficar "órfã" — visível em Equipes mas ausente do Kanban —
- * por qualquer motivo histórico (dado criado antes desse fluxo existir, uma
- * falha no meio da criação, edição direta do armazenamento etc.). Roda uma
- * vez, só depois que as duas fontes (Equipes e Kanban) já hidrataram — sem
- * essa espera, o efeito veria o Kanban ainda vazio (`itens: []`) durante o
- * carregamento inicial e criaria cards duplicados para todo mundo.
+ * Garante o mesmo invariante nos dois sentidos entre Equipes e Kanban:
+ * - Toda equipe com status diferente de 'inativo' tem pelo menos um card no
+ *   Kanban (mesmo invariante que já vale ao criar uma equipe pela tela).
+ * - Todo card do Kanban com `equipeId` aponta pra uma equipe que realmente
+ *   existe — um card "fantasma" apontando pra uma equipe já excluída fica
+ *   visível no Kanban mas invisível em Equipes, o que é inconsistente e
+ *   confunde quem está usando o app.
+ * Sem isso, qualquer forma histórica de os dois ficarem fora de sincronia
+ * (dado criado antes desses fluxos existirem, uma falha no meio de uma
+ * operação, edição direta do armazenamento etc.) nunca se auto-corrige. Roda
+ * uma vez, só depois que as duas fontes (Equipes e Kanban) já hidrataram —
+ * sem essa espera, o efeito veria o Kanban ainda vazio (`itens: []`) durante
+ * o carregamento inicial e criaria/removeria cards errado pra todo mundo.
  */
 export function SincronizarEquipesKanban() {
   const { equipes, isHydrated: equipesHidratado } = useEquipes();
-  const { itens, adicionarItem, atualizarItem, isHydrated: kanbanHidratado } = useKanban();
+  const { itens, adicionarItem, atualizarItem, removerItem, isHydrated: kanbanHidratado } = useKanban();
 
   useEffect(() => {
     if (!equipesHidratado || !kanbanHidratado) return;
@@ -37,7 +41,9 @@ export function SincronizarEquipesKanban() {
         if (corrigida) atualizarItem(novoId, corrigida);
       });
     });
-  }, [equipes, itens, equipesHidratado, kanbanHidratado, adicionarItem, atualizarItem]);
+
+    cardsOrfaos(equipes, itens).forEach((card) => removerItem(card.id));
+  }, [equipes, itens, equipesHidratado, kanbanHidratado, adicionarItem, atualizarItem, removerItem]);
 
   return null;
 }

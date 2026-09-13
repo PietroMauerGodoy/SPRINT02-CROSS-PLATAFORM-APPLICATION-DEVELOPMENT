@@ -25,8 +25,9 @@ export type Usuario = {
   senha: string;
   cargo: string;
   papel: PapelUsuario;
-  /** Equipe à qual o usuário pertence — usado para escopo de acesso do papel 'operador_campo'. */
-  equipeId?: string;
+  /** Equipes às quais o usuário pertence — usado para escopo de acesso do papel
+   *  'operador_campo'. Um Operador de Campo pode estar em mais de uma equipe. */
+  equipeIds?: string[];
   avatar?: string;
 };
 
@@ -79,6 +80,16 @@ export type SeveridadeSnapshot = {
   data: string; // 'YYYY-MM-DD'
   contagens: Record<SeveridadeVegetacao, number>;
 };
+
+/** Leitura crua de um sensor de altura de vegetação (ESP32 + HC-SR04), como
+ *  vem no payload da API de sensores. `id` é o km do ponto de medição (ex: "5.0"). */
+export type LeituraSensorRaw = {
+  id: string;
+  altura: number;
+};
+
+/** Estado da máquina de estados do botão "Atualizar" (sincronização de sensores). */
+export type EstadoSincronizacao = 'idle' | 'sincronizando' | 'sucesso' | 'erro';
 
 export type RootStackParamList = {
   Login: undefined;

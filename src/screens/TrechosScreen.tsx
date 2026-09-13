@@ -122,7 +122,7 @@ export default function TrechosScreen({ navigation }: Props) {
               { icon: 'calendar-outline',  label: 'Planejamento', ativo: false, onPress: undefined },
               { icon: 'bar-chart-outline', label: 'Relatórios',   ativo: false, onPress: undefined },
               { icon: 'settings-outline',  label: 'Config.',      ativo: false, onPress: () => navigation.navigate('Configuracoes') },
-            ].filter((item) => mostrarOperacional || !ITENS_MENU_SEM_TELA.includes(item.label)).map((item) => (
+            ].filter((item) => (mostrarOperacional || !ITENS_MENU_SEM_TELA.includes(item.label)) && (mostrarOperacional || item.label !== 'Equipes')).map((item) => (
               <TouchableOpacity
                 key={item.label}
                 style={[s.sideItem, item.ativo && s.sideItemAtivo]}

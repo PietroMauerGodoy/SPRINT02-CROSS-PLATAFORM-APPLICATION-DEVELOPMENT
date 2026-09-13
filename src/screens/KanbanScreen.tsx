@@ -25,7 +25,9 @@ import { useEquipes } from '../context/EquipesContext';
 import { useAuth } from '../context/AuthContext';
 import { getKanbanItemsVisiveis, podeCriarOuExcluirKanbanItem, podeVerItemMenuOperacional, ITENS_MENU_SEM_TELA } from '../utils/permissions';
 import { coordenadasAproximadas, corrigirComGeocodingSeNecessario } from '../utils/geo';
+import { calcSeveridade } from '../utils/severidade';
 import AppHeader from '../components/AppHeader';
+import BotaoAtualizarSincronizacao from '../components/kanban/BotaoAtualizarSincronizacao';
 
 import bgRoxo     from '../../assets/images/backgroundroxo.png';
 
@@ -63,14 +65,6 @@ const VEG_COR: Record<string, string> = {
   'Mata Ciliar Densa':         '#EF4444',
 };
 
-// Faixas alinhadas ao Anexo 06/ARTESP: poda obrigatória a partir de 30cm (regra geral).
-// 0–29cm dividido em 3 faixas iguais (10cm cada) para dar visibilidade de progressão.
-function calcSeveridade(cm: number): SeveridadeVegetacao {
-  if (cm >= 30) return 'critico';
-  if (cm >= 20) return 'grave';
-  if (cm >= 10) return 'leve';
-  return 'sem_ocorrencia';
-}
 function sevCor(sev: SeveridadeVegetacao): string {
   const m: Record<SeveridadeVegetacao, string> = {
     sem_ocorrencia: '#7C3AED', leve: '#16A34A', grave: '#D97706', critico: '#DC2626',
@@ -511,7 +505,7 @@ export default function KanbanScreen({ navigation, route }: Props) {
               { icon: 'calendar-outline',  label: 'Planejamento', onPress: undefined,                                ativo: false },
               { icon: 'bar-chart-outline', label: 'Relatórios',   onPress: undefined,                                ativo: false },
               { icon: 'settings-outline',  label: 'Config.',      onPress: () => navigation.navigate('Configuracoes'), ativo: false },
-            ].filter((item) => mostrarOperacional || !ITENS_MENU_SEM_TELA.includes(item.label)).map((item) => {
+            ].filter((item) => (mostrarOperacional || !ITENS_MENU_SEM_TELA.includes(item.label)) && (mostrarOperacional || item.label !== 'Equipes')).map((item) => {
               const hov = hoverSide === item.label && !item.ativo;
               return (
                 <Pressable key={item.label}
@@ -561,6 +555,9 @@ export default function KanbanScreen({ navigation, route }: Props) {
                 )}
               </View>
 
+              {/* Sincronização de sensores IoT — só Admin/Gestor, mesmo gate de
+                  permissão já usado pro "..." de coluna (podeCriarExcluir). */}
+              {podeCriarExcluir && <BotaoAtualizarSincronizacao />}
             </View>
           </View>
 

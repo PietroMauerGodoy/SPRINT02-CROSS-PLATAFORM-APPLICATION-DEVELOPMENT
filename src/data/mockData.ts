@@ -27,7 +27,7 @@ export const mockUsuarios: Usuario[] = [
     senha: '123456',
     cargo: 'Operadora de Campo',
     papel: 'operador_campo',
-    equipeId: '#01', // Equipe Alfa
+    equipeIds: ['#01'], // Equipe Alfa
   },
   {
     id: 4,
@@ -37,7 +37,7 @@ export const mockUsuarios: Usuario[] = [
     senha: '123456',
     cargo: 'Operador de Campo',
     papel: 'operador_campo',
-    equipeId: '#02', // Equipe Beta
+    equipeIds: ['#02'], // Equipe Beta
   },
 ];
 

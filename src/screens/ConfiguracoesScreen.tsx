@@ -72,7 +72,7 @@ export default function ConfiguracoesScreen({ navigation }: Props) {
               { icon: 'calendar-outline',  label: 'Planejamento', onPress: undefined,                           ativo: false },
               { icon: 'bar-chart-outline', label: 'Relatórios',   onPress: undefined,                           ativo: false },
               { icon: 'settings-outline',  label: 'Config.',      onPress: undefined,                           ativo: true  },
-            ].filter((item) => mostrarOperacional || !ITENS_MENU_SEM_TELA.includes(item.label)).map((item) => (
+            ].filter((item) => (mostrarOperacional || !ITENS_MENU_SEM_TELA.includes(item.label)) && (mostrarOperacional || item.label !== 'Equipes')).map((item) => (
               <Pressable
                 key={item.label}
                 style={[s.sideItem, item.ativo && s.sideItemAtivo, hoverSide === item.label && !item.ativo && s.sideItemHover]}

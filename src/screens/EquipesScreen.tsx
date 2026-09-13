@@ -23,6 +23,7 @@ import NotificacoesBell from '../components/NotificacoesBell';
 import { useNotificacoes } from '../context/NotificacoesContext';
 import { useEquipes } from '../context/EquipesContext';
 import { useKanban } from '../context/KanbanContext';
+import { useUsuarios } from '../context/UsuariosContext';
 import { useConfiguracoes } from '../context/ConfiguracoesContext';
 import { useAuth } from '../context/AuthContext';
 import { getEquipesVisiveis, podeGerenciarEquipes, podeVerItemMenuOperacional, ITENS_MENU_SEM_TELA } from '../utils/permissions';
@@ -50,6 +51,8 @@ type Props = {
 export default function EquipesScreen({ navigation }: Props) {
 const { equipes, adicionarEquipe, editarEquipe, excluirEquipe, alternarStatus } = useEquipes();
   const { itens, adicionarItem, atualizarItem: atualizarItemKanban, removerPorEquipeId } = useKanban();
+  const { usuarios, editarUsuario, desvincularEquipe } = useUsuarios();
+  const operadoresCampo = usuarios.filter((u) => u.papel === 'operador_campo');
   const { modoCompacto, notifPrefs } = useConfiguracoes();
   const { usuario, logout } = useAuth();
   const equipesVisiveis = usuario ? getEquipesVisiveis(usuario, equipes) : equipes;
@@ -76,7 +79,12 @@ const { equipes, adicionarEquipe, editarEquipe, excluirEquipe, alternarStatus } 
   const [novoKm,      setNovoKm]      = useState('');
   const [novoTrecho,  setNovoTrecho]  = useState('');
   const [novoResp,    setNovoResp]    = useState('');
+  /** id do Usuario (Operador de Campo) escolhido como responsável, ou null se
+   *  estiver no modo "Outro..." (texto livre, pra responsável sem login no
+   *  sistema — ex: um supervisor que não é usuário do app). */
+  const [respOperadorId, setRespOperadorId] = useState<number | null>(null);
   const [confirmarExcluir, setConfirmarExcluir] = useState<Equipe | null>(null);
+  const [confirmarDesativar, setConfirmarDesativar] = useState<Equipe | null>(null);
 
   const filtradas = useMemo(() => {
     const t = busca.toLowerCase();
@@ -95,7 +103,8 @@ const { equipes, adicionarEquipe, editarEquipe, excluirEquipe, alternarStatus } 
 
   function abrirModalCriar() {
     setEquipeEditando(null);
-    setNovoNome(''); setNovoKm(''); setNovoTrecho(''); setNovoResp(''); setNovoRodovia('BR-116'); setRodoviaLivre(false);
+    setNovoNome(''); setNovoKm(''); setNovoTrecho(''); setNovoResp(''); setRespOperadorId(null);
+    setNovoRodovia('BR-116'); setRodoviaLivre(false);
     setModalCriar(true);
   }
 
@@ -103,7 +112,12 @@ const { equipes, adicionarEquipe, editarEquipe, excluirEquipe, alternarStatus } 
     setEquipeEditando(eq);
     setNovoNome(eq.nome); setNovoRodovia(eq.rodovia);
     setRodoviaLivre(!RODOVIAS_FORM.includes(eq.rodovia));
-    setNovoKm(eq.km.replace('Km ', '')); setNovoTrecho(eq.trechoRodovia); setNovoResp(eq.responsavel);
+    setNovoKm(eq.km.replace('Km ', '')); setNovoTrecho(eq.trechoRodovia);
+    // Se já existe um Operador de Campo com essa equipe em equipeIds,
+    // pré-seleciona ele no lugar do texto livre.
+    const operadorAtual = operadoresCampo.find((o) => o.equipeIds?.includes(eq.id));
+    setRespOperadorId(operadorAtual?.id ?? null);
+    setNovoResp(eq.responsavel);
     setModalCriar(true);
   }
 
@@ -115,12 +129,30 @@ const { equipes, adicionarEquipe, editarEquipe, excluirEquipe, alternarStatus } 
     const rodovia = novoRodovia.trim();
     const kmNum = parseFloat(novoKm.trim()) || 0;
     setModalCriar(false);
+
+    // Se um Operador de Campo real foi escolhido (em vez de texto livre "Outro..."),
+    // essa equipe é ADICIONADA ao equipeIds dele — é isso que dá a ele acesso ao
+    // Kanban/Ocorrências/Dashboard filtrados por essa equipe. Nunca substitui as
+    // outras equipes que ele já tinha (um Operador pode estar em várias equipes),
+    // e não desvincula nenhum outro operador que já apontava pra cá (uma equipe
+    // também pode ter mais de um Operador de Campo).
+    function sincronizarOperador(equipeId: string) {
+      if (respOperadorId === null) return;
+      const operador = usuarios.find((u) => u.id === respOperadorId);
+      if (!operador) return;
+      const atuais = operador.equipeIds ?? [];
+      if (!atuais.includes(equipeId)) {
+        editarUsuario(operador.id, { ...operador, equipeIds: [...atuais, equipeId] });
+      }
+    }
+
     if (equipeEditando) {
       const rodoviaMudou = equipeEditando.rodovia !== rodovia;
       editarEquipe(equipeEditando.id, {
         nome: novoNome.trim(), rodovia,
         km: `Km ${novoKm.trim()}`, trechoRodovia: novoTrecho.trim(), responsavel: novoResp.trim(),
       });
+      sincronizarOperador(equipeEditando.id);
       // Se a rodovia mudou, o(s) trecho(s) dela no Kanban precisam refletir isso
       // também — senão Equipes e Kanban mostram rodovias diferentes pra mesma equipe.
       if (rodoviaMudou) {
@@ -146,6 +178,7 @@ const { equipes, adicionarEquipe, editarEquipe, excluirEquipe, alternarStatus } 
         nome: novoNome.trim(), rodovia,
         km: `Km ${novoKm.trim()}`, trechoRodovia: novoTrecho.trim(), responsavel: novoResp.trim(),
       });
+      sincronizarOperador(novoId);
       // Nova equipe (ativo) → entra automaticamente na coluna 1 do Kanban
       const novoKanbanId = adicionarItem({
         equipeId: novoId, nomeEquipe: novoNome.trim(), rodovia,
@@ -174,6 +207,7 @@ const { equipes, adicionarEquipe, editarEquipe, excluirEquipe, alternarStatus } 
   function confirmarDelete() {
     if (confirmarExcluir) {
       removerPorEquipeId(confirmarExcluir.id);
+      desvincularEquipe(confirmarExcluir.id);
       excluirEquipe(confirmarExcluir.id);
       adicionarNotificacao({
         cor: '#EF4444', icone: 'trash-outline',
@@ -185,6 +219,24 @@ const { equipes, adicionarEquipe, editarEquipe, excluirEquipe, alternarStatus } 
   }
 
   const STATUS_LABEL: Record<StatusEquipe, string> = { ativo: 'Ativo', em_campo: 'Em Campo', inativo: 'Inativo' };
+
+  // Desativar uma equipe remove o card dela do Kanban (efeito colateral não
+  // óbvio a partir do ícone) — pede confirmação, igual já acontece pra
+  // excluir. Reativar não tem esse risco (só recria o card), então age direto.
+  function pedirAlternarStatus(eq: Equipe) {
+    if (eq.status === 'inativo') {
+      handleAlternarStatus(eq.id);
+    } else {
+      setConfirmarDesativar(eq);
+    }
+  }
+
+  function confirmarDesativarEquipe() {
+    if (confirmarDesativar) {
+      handleAlternarStatus(confirmarDesativar.id);
+      setConfirmarDesativar(null);
+    }
+  }
 
   function handleAlternarStatus(id: string) {
     const eq = equipes.find((e) => e.id === id);
@@ -259,7 +311,7 @@ const { equipes, adicionarEquipe, editarEquipe, excluirEquipe, alternarStatus } 
               { icon: 'calendar-outline',  label: 'Planejamento', onPress: undefined,                                ativo: false },
 { icon: 'bar-chart-outline', label: 'Relatórios',   onPress: undefined,                                ativo: false },
               { icon: 'settings-outline',  label: 'Config.',      onPress: () => navigation.navigate('Configuracoes'), ativo: false },
-            ].filter((item) => mostrarOperacional || !ITENS_MENU_SEM_TELA.includes(item.label)).map((item) => {
+            ].filter((item) => (mostrarOperacional || !ITENS_MENU_SEM_TELA.includes(item.label)) && (mostrarOperacional || item.label !== 'Equipes')).map((item) => {
               const hovered = hoverSide === item.label && !item.ativo;
               return (
                 <Pressable
@@ -425,7 +477,7 @@ paginadas.map((eq, idx) => (
                           <Ionicons name="create-outline" size={13} color={colors.primary} />
                           <Text style={s.acBtnTxt}>Editar</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={s.acBtnStatus} onPress={(e) => { e.stopPropagation?.(); handleAlternarStatus(eq.id); }}>
+                        <TouchableOpacity style={s.acBtnStatus} onPress={(e) => { e.stopPropagation?.(); pedirAlternarStatus(eq); }}>
                           <Ionicons name="swap-horizontal-outline" size={14} color="#0EA5E9" />
                         </TouchableOpacity>
                         <TouchableOpacity style={s.acBtnDel} onPress={(e) => { e.stopPropagation?.(); handleExcluir(eq); }}>
@@ -491,13 +543,47 @@ paginadas.map((eq, idx) => (
               { label: 'Nome da equipe', val: novoNome,   set: setNovoNome,   ph: 'Ex: Equipe Alfa'       },
               { label: 'Km',            val: novoKm,     set: setNovoKm,     ph: 'Ex: 50'                },
               { label: 'Trecho',        val: novoTrecho, set: setNovoTrecho, ph: 'Ex: Rodoanel Oeste'    },
-              { label: 'Responsável',   val: novoResp,   set: setNovoResp,   ph: 'Ex: Eng. Silva'        },
             ].map((f) => (
               <View key={f.label} style={s.mField}>
                 <Text style={s.mLabel}>{f.label}</Text>
                 <TextInput style={[s.mInput, { outlineStyle: 'none' } as any]} placeholder={f.ph} placeholderTextColor={colors.gray400} value={f.val} onChangeText={f.set} />
               </View>
             ))}
+
+            <View style={s.mField}>
+              <Text style={s.mLabel}>Responsável</Text>
+              <View style={s.chipRow}>
+                {operadoresCampo.map((op) => (
+                  <TouchableOpacity
+                    key={op.id}
+                    style={[s.chip, respOperadorId === op.id && s.chipOn]}
+                    onPress={() => { setRespOperadorId(op.id); setNovoResp(op.nome); }}
+                  >
+                    <Text style={[s.chipTxt, respOperadorId === op.id && s.chipTxtOn]}>{op.nome}</Text>
+                  </TouchableOpacity>
+                ))}
+                <TouchableOpacity
+                  style={[s.chip, respOperadorId === null && s.chipOn]}
+                  onPress={() => { setRespOperadorId(null); setNovoResp(''); }}
+                >
+                  <Text style={[s.chipTxt, respOperadorId === null && s.chipTxtOn]}>Outro...</Text>
+                </TouchableOpacity>
+              </View>
+              {respOperadorId === null ? (
+                <TextInput
+                  style={[s.mInput, { outlineStyle: 'none', marginTop: 8 } as any]}
+                  placeholder="Ex: Eng. Silva"
+                  placeholderTextColor={colors.gray400}
+                  value={novoResp}
+                  onChangeText={setNovoResp}
+                  autoFocus
+                />
+              ) : (
+                <Text style={s.mAjuda}>
+                  {usuarios.find((u) => u.id === respOperadorId)?.usuario} vai enxergar essa equipe no Kanban/Ocorrências/Dashboard dele.
+                </Text>
+              )}
+            </View>
 
             <View style={s.mField}>
               <Text style={s.mLabel}>Rodovia</Text>
@@ -577,6 +663,32 @@ paginadas.map((eq, idx) => (
               <TouchableOpacity style={s.delBtnConfirm} onPress={confirmarDelete}>
                 <Ionicons name="trash-outline" size={14} color="#fff" />
                 <Text style={s.delBtnConfirmTxt}>Excluir</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── MODAL DESATIVAR ──────────────────────────────────────────────── */}
+      <Modal visible={confirmarDesativar !== null} transparent animationType="fade">
+        <View style={s.overlay}>
+          <View style={s.delCard}>
+            <View style={[s.delIconBox, { backgroundColor: '#F1F5F9' }]}>
+              <Ionicons name="pause-circle" size={28} color="#64748B" />
+            </View>
+            <Text style={s.delTitulo}>Desativar equipe</Text>
+            <Text style={s.delDesc}>
+              Desativar a <Text style={{ fontWeight: '700' }}>{confirmarDesativar?.nome}</Text> remove
+              o card dela do Kanban (a equipe continua cadastrada, só some do quadro operacional).
+              {'\n'}Pode reativar a qualquer momento.
+            </Text>
+            <View style={s.delBtns}>
+              <TouchableOpacity style={s.delBtnCancel} onPress={() => setConfirmarDesativar(null)}>
+                <Text style={s.delBtnCancelTxt}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[s.delBtnConfirm, { backgroundColor: '#64748B' }]} onPress={confirmarDesativarEquipe}>
+                <Ionicons name="pause-circle-outline" size={14} color="#fff" />
+                <Text style={s.delBtnConfirmTxt}>Desativar</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -737,6 +849,7 @@ const s = StyleSheet.create({
   mField:    { gap: 5 },
   mLabel:    { fontSize: 11, fontWeight: '600', color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.3 },
   mInput:    { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: colors.secondary },
+  mAjuda:    { fontSize: 11, color: '#94A3B8', marginTop: 4 },
   chipRow:   { flexDirection: 'row', gap: 8 },
   chip:      { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: '#E2E8F0' },
   chipOn:    { backgroundColor: colors.primary, borderColor: colors.primary },

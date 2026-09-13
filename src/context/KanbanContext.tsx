@@ -1,8 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { KanbanItem, SeveridadeVegetacao } from '../types';
+import { KanbanItem, LeituraSensorRaw, SeveridadeVegetacao } from '../types';
 import { mockKanban } from '../data/mockData';
 import { coordenadasAproximadas, migrarRodoviaLegada } from '../utils/geo';
+import { calcSeveridade } from '../utils/severidade';
+import { encontrarCardPorKm } from '../utils/agregacaoSensores';
 
 function hoje(): string {
   return new Date().toISOString().slice(0, 10);
@@ -43,6 +45,9 @@ type KanbanContextType = {
   removerPorEquipeId: (equipeId: string) => void;
   limparColuna:       (sev: SeveridadeVegetacao) => void;
   temEquipeNoKanban:  (equipeId: string) => boolean;
+  /** Recebe leituras JÁ agregadas (uma por km, menor valor — ver `agregarLeiturasPorMenorValor`)
+   *  e aplica em cada card correspondente. Devolve quantos cards foram atualizados. */
+  aplicarLeiturasSensor: (leituras: LeituraSensorRaw[]) => number;
   /** false até o carregamento inicial (AsyncStorage ou seed do mock) terminar. */
   isHydrated:         boolean;
 };
@@ -129,8 +134,39 @@ export function KanbanProvider({ children }: { children: ReactNode }) {
     return itens.some((i) => i.equipeId === equipeId);
   }
 
+  // Aplica leituras de sensor já agregadas por km (ver agregarLeiturasPorMenorValor).
+  // Km diferentes ainda podem cair no range do MESMO card — a regra do menor
+  // valor vale também nesse caso, então reduzimos de novo aqui, agora por
+  // card, antes de aplicar (sem isso, duas leituras de kms distintos pro
+  // mesmo card aplicariam a última processada, não a menor). Sem card
+  // correspondente, a leitura é ignorada (console.warn pra debug, sem popup:
+  // não é erro do usuário, e criar card novo automaticamente é fora de escopo).
+  // Severidade sempre recalculada via calcSeveridade — nunca reimplementada.
+  function aplicarLeiturasSensor(leituras: LeituraSensorRaw[]): number {
+    const menorPorCard = new Map<string, { card: KanbanItem; altura: number }>();
+
+    for (const leitura of leituras) {
+      const km = parseFloat(leitura.id);
+      const card = encontrarCardPorKm(km, itens);
+      if (!card) {
+        console.warn(`Leitura de sensor sem card correspondente: km ${leitura.id}`);
+        continue;
+      }
+      const atual = menorPorCard.get(card.id);
+      if (!atual || leitura.altura < atual.altura) {
+        menorPorCard.set(card.id, { card, altura: leitura.altura });
+      }
+    }
+
+    menorPorCard.forEach(({ card, altura }) => {
+      atualizarItem(card.id, { alturaAtual: altura, severidade: calcSeveridade(altura) });
+    });
+
+    return menorPorCard.size;
+  }
+
   return (
-    <KanbanContext.Provider value={{ itens, adicionarItem, atualizarItem, removerItem, removerPorEquipeId, limparColuna, temEquipeNoKanban, isHydrated }}>
+    <KanbanContext.Provider value={{ itens, adicionarItem, atualizarItem, removerItem, removerPorEquipeId, limparColuna, temEquipeNoKanban, aplicarLeiturasSensor, isHydrated }}>
       {children}
     </KanbanContext.Provider>
   );

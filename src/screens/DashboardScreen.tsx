@@ -37,6 +37,10 @@ export default function DashboardScreen({ navigation }: Props) {
   const { snapshots } = useHistorico();
   const metrics = useDashboardMetrics({ usuario, rodovia: 'Todas', periodoDias: 30, snapshots });
   const ehOperadorCampo = usuario?.papel === 'operador_campo';
+  const equipesDoOperador = usuario?.equipeIds ?? [];
+  const subtituloOperador = equipesDoOperador.length > 1
+    ? `Visão reduzida — dados das suas equipes (${equipesDoOperador.join(', ')})`
+    : `Visão reduzida — dados da sua equipe${equipesDoOperador.length ? ` (${equipesDoOperador[0]})` : ''}`;
   const mostrarOperacional = usuario ? podeVerItemMenuOperacional(usuario) : false;
 
   return (
@@ -62,7 +66,7 @@ export default function DashboardScreen({ navigation }: Props) {
               { icon: 'calendar-outline',  label: 'Planejamento', ativo: false, onPress: undefined },
               { icon: 'bar-chart-outline', label: 'Relatórios',   ativo: false, onPress: undefined },
               { icon: 'settings-outline',  label: 'Config.',      ativo: false, onPress: () => navigation.navigate('Configuracoes') },
-            ].filter((item) => mostrarOperacional || !ITENS_MENU_SEM_TELA.includes(item.label)).map((item) => (
+            ].filter((item) => (mostrarOperacional || !ITENS_MENU_SEM_TELA.includes(item.label)) && (mostrarOperacional || item.label !== 'Equipes')).map((item) => (
               <TouchableOpacity
                 key={item.label}
                 style={[s.sideItem, item.ativo && s.sideItemAtivo]}
@@ -87,9 +91,7 @@ export default function DashboardScreen({ navigation }: Props) {
               <View>
                 <Text style={s.titulo}>Dashboard Operacional</Text>
                 <Text style={s.subtitulo}>
-                  {ehOperadorCampo
-                    ? `Visão reduzida — dados da sua equipe${usuario?.equipeId ? ` (${usuario.equipeId})` : ''}`
-                    : 'Onde agir agora, e por quê'}
+                  {ehOperadorCampo ? subtituloOperador : 'Onde agir agora, e por quê'}
                 </Text>
               </View>
             </View>
