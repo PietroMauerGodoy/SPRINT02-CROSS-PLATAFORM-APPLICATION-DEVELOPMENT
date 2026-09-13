@@ -219,6 +219,8 @@ Os 10 trechos mockados (`K01`–`K10`) usam 3 rodovias **confirmadas como admini
 
 Além dos dados mockados e das APIs de clima/geocodificação, o Kanban tem um fluxo pensado pra receber leituras reais de sensores de altura de vegetação em campo — hoje simulado por um mock, mas com a mesma forma que o dado real vai ter.
 
+> **Vai implementar a API de verdade?** Ver [`docs/integracao-api-sensores.md`](docs/integracao-api-sensores.md) — guia completo com o contrato exato esperado, onde plugar o endpoint (3 passos, um arquivo só) e um checklist de teste. O resumo abaixo é só pra quem quer entender o fluxo, não pra quem vai implementar.
+
 **Fluxo (ESP32 → API → botão "Atualizar"):** um ESP32 com sensor ultrassônico (HC-SR04) instalado no acostamento faz `POST` direto, via WiFi, pra uma API própria — sem LoRa, sem gateway intermediário. O app **nunca recebe esse POST**: ele funciona em modo *pull*, buscando (`GET`) o lote de leituras disponível só quando alguém aperta **"Atualizar"** ao lado do filtro de Rodovias no Kanban (visível só pra Admin/Gestor — Operador de Campo não sincroniza sensores, mesma regra de quem pode criar/excluir item do Kanban). Hoje essa busca é 100% mock (`src/services/sensoresService.ts`, função `buscarLeiturasSensor()`), com um `// TODO` marcando exatamente onde entra o `fetch` real — nada em quem consome (Context, botão) muda quando a API existir de verdade.
 
 > **Pra quem for plugar a API real:** todo o trabalho fica isolado em `src/services/sensoresService.ts` — nenhum outro arquivo precisa mudar. O arquivo já tem uma função `buscarLeiturasApi()` pronta e funcional (`fetch` + tratamento de status/formato de resposta), só comentada/não usada ainda. Os passos são:
