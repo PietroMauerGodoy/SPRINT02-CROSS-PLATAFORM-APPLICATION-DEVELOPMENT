@@ -33,7 +33,7 @@ Os trechos mockados usam rodovias **realmente administradas pela Motiva** (não 
 
 - **Instituição:** FIAP
 - **Metodologia:** Design Thinking, entregas por sprint (board no Miro + PDF espelhando o Miro)
-- **Sprint atual:** Sprint 3 — foco em MVP funcional
+- **Sprint atual:** Sprint 4 — foco em MVP funcional
 - **Equipe:**
   - Fernando Melo — RM 564297
   - Patrick Mansour — RM 562970
@@ -42,6 +42,7 @@ Os trechos mockados usam rodovias **realmente administradas pela Motiva** (não 
   - Ryan Santos — RM 565102
   - Samir Assad — RM 561562
 - **Repositório:** https://github.com/PietroMauerGodoy/SPRINT-CROSS-PLATAFORM-APPLICATION-DEVELOPMENT
+- **Link Youtube:** https://youtu.be/7PJPtKxTn3c?feature=shared
 
 ---
 
